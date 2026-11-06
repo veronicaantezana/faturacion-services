@@ -1,0 +1,24 @@
+{
+  "tipo": "COMPRA_VENTA",
+  "cliente": {
+    "tipoDocumento": 1,
+    "documento": "1234567",
+    "complemento": null,
+    "razonSocial": "CLIENTE DE PRUEBA"
+  },
+  "metodoPago": 1,
+  "usuario": "demo",
+  "detalle": [
+    {
+      "codigo": "PROD-001",
+      "codigoSin": "99100",
+      "actividad": "620000",
+      "descripcion": "Producto de demostracion",
+      "unidadMedida": 58,
+      "cantidad": 2,
+      "precioUnitario": 50.00,
+      "descuento": 5.00
+    }
+  ],
+  "descuentoAdicional": 2.00
+}
