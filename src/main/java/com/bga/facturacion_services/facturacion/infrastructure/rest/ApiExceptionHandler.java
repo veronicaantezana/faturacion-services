@@ -2,6 +2,7 @@ package com.bga.facturacion_services.facturacion.infrastructure.rest;
 
 import com.bga.facturacion_services.facturacion.application.EmitirFactura.FacturaNoEncontrada;
 import com.bga.facturacion_services.facturacion.infrastructure.persistence.JpaFacturaStore.Conflicto;
+import com.bga.facturacion_services.facturacion.infrastructure.rest.EmisionCompraVentaController.EmisionNoConfirmada;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.*;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -21,6 +22,8 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     ProblemDetail duplicada(DataIntegrityViolationException ex) {
         return problema(409, "Solicitud concurrente; reintente con la misma Idempotency-Key");
     }
+    @ExceptionHandler(EmisionNoConfirmada.class)
+    ProblemDetail noConfirmada(EmisionNoConfirmada ex) { return problema(503, ex.getMessage()); }
     @Override
     protected ResponseEntity<Object> handleMethodArgumentNotValid(MethodArgumentNotValidException ex,
             HttpHeaders headers, HttpStatusCode status, WebRequest request) {
@@ -30,6 +33,8 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         return ResponseEntity.badRequest().body(detalle);
     }
     private ProblemDetail problema(int status, String detalle) {
-        return ProblemDetail.forStatusAndDetail(HttpStatusCode.valueOf(status), detalle);
+        var problema = ProblemDetail.forStatusAndDetail(HttpStatusCode.valueOf(status), detalle);
+        problema.setProperty("mensaje", detalle);
+        return problema;
     }
 }

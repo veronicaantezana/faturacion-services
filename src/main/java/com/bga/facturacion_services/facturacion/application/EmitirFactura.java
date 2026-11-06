@@ -27,19 +27,21 @@ public final class EmitirFactura {
             throw new IllegalArgumentException("Idempotency-Key requiere entre 8 y 100 caracteres alfanumericos, guion o guion bajo");
         ReglaFactura regla = reglas.get(solicitud.tipo());
         if (regla == null) throw new IllegalArgumentException("Tipo de factura no soportado");
+        Factura.Emisor emisorFactura = emisorDe(solicitud);
         // Validate before reserving an immutable, unique invoice number.
-        regla.construir(UUID.randomUUID(), 0, OffsetDateTime.now(clock), emisor, solicitud);
+        regla.construir(UUID.randomUUID(), 0, OffsetDateTime.now(clock), emisorFactura, solicitud);
         FacturaStore.Reserva reserva = store.reservar(clave, solicitud);
         if (!reserva.nueva()) return consultar(reserva.id());
-        Factura factura = regla.construir(reserva.id(), reserva.numero(), OffsetDateTime.now(clock), emisor, solicitud);
+        Factura factura = regla.construir(reserva.id(), reserva.numero(), OffsetDateTime.now(clock), emisorFactura, solicitud);
         RegistroFactura preparada = new RegistroFactura(factura, new ResultadoEmision(ResultadoEmision.Estado.PREPARADA,
-                proveedor.codigo(), proveedor.simulado(), null, "Preparada para envio", null, null));
+                proveedor.codigo(), proveedor.simulado(), null, "Preparada para envio", null, null, null, null));
         store.guardar(factura.id(), preparada);
         ResultadoEmision resultado;
         try { resultado = proveedor.emitir(factura); }
+        catch (IllegalArgumentException ex) { throw ex; }
         catch (RuntimeException ex) {
             resultado = new ResultadoEmision(ResultadoEmision.Estado.PENDIENTE_CONFIRMACION,
-                    proveedor.codigo(), proveedor.simulado(), null, "Resultado no confirmado; no reenviar automaticamente", null, null);
+                    proveedor.codigo(), proveedor.simulado(), null, "Resultado no confirmado; no reenviar automaticamente", null, null, null, null);
         }
         RegistroFactura registro = new RegistroFactura(factura, resultado);
         store.guardar(factura.id(), registro);
@@ -47,6 +49,13 @@ public final class EmitirFactura {
     }
     public RegistroFactura consultar(UUID id) {
         return store.buscar(id).orElseThrow(() -> new FacturaNoEncontrada(id));
+    }
+    private Factura.Emisor emisorDe(SolicitudFactura solicitud) {
+        int sucursal = solicitud.sucursal() != null ? solicitud.sucursal() : emisor.sucursal();
+        int punto = solicitud.puntoVenta() != null ? solicitud.puntoVenta() : emisor.puntoVenta();
+        if (sucursal < 0 || punto < 0) throw new IllegalArgumentException("Sucursal y punto de venta invalidos");
+        return new Factura.Emisor(emisor.nit(), emisor.razonSocial(), emisor.municipio(), emisor.direccion(),
+                sucursal, punto, emisor.telefono());
     }
     public static final class FacturaNoEncontrada extends RuntimeException {
         public FacturaNoEncontrada(UUID id) { super("Factura no encontrada: " + id); }

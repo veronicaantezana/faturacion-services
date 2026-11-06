@@ -17,6 +17,6 @@ public final class TransporteSimulado {
             default -> ResultadoEmision.Estado.ACEPTADA_SIMULADA;
         };
         return new ResultadoEmision(estado, proveedor, true, "SIM-" + id,
-                "Simulacion local: " + escenario + ". Sin validez fiscal.", formato, solicitud);
+                "Simulacion local: " + escenario + ". Sin validez fiscal.", formato, solicitud, null, null);
     }
 }
