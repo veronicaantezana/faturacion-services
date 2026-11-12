@@ -2,5 +2,9 @@ package com.bga.facturacion_services.facturacion.application;
 
 import com.bga.facturacion_services.facturacion.domain.Factura;
 
-public record RegistroFactura(Factura factura, ResultadoEmision emision) {}
+public record RegistroFactura(Factura factura, ResultadoEmision emision, AltaFacturaWeb.Resultado alta) {
+    public RegistroFactura(Factura factura, ResultadoEmision emision) {
+        this(factura, emision, null);
+    }
+}
 

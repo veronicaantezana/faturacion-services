@@ -17,7 +17,8 @@ public record FacturaEmitidaResponse(
         BigDecimal montoTotal, BigDecimal montoTotalSujetoIva, int codigoMoneda, BigDecimal tipoCambio,
         BigDecimal montoTotalMoneda, BigDecimal montoGiftCard, BigDecimal descuentoAdicional,
         Integer codigoExcepcion, String cafc, String leyenda, String usuario, int codigoDocumentoSector,
-        String modoEmision, String estado, boolean reversionAnulacionUtilizada, List<ItemEmitido> items) {
+        String modoEmision, String estado, boolean reversionAnulacionUtilizada, List<ItemEmitido> items,
+        Long idComplemento, Long nroSolicitud) {
 
     public record ItemEmitido(String actividadEconomica, long codigoProductoSin, String codigoProducto,
                               String descripcion, BigDecimal cantidad, int unidadMedida, String unidadMedidaDescripcion,
@@ -42,7 +43,7 @@ public record FacturaEmitidaResponse(
                 venta.correo() == null ? "" : venta.correo(), factura.metodoPago(), metodoPago(factura.metodoPago()),
                 venta.numeroTarjeta(), factura.total(), factura.totalSujetoIva(), venta.codigoMoneda(),
                 venta.tipoCambio(), venta.montoTotalMoneda(), venta.montoGiftCard(), factura.descuentoAdicional(),
-                venta.codigoExcepcion(), venta.cafc(), "", factura.usuario(), 1,
+                venta.codigoExcepcion(), venta.cafc(), "", factura.usuario(), factura.codigoDocumentoSector(),
                 contingencia ? "CONTINGENCIA" : "EN_LINEA",
                 contingencia ? "PENDIENTE_CONTINGENCIA" : "VALIDADA",
                 false,
@@ -50,7 +51,9 @@ public record FacturaEmitidaResponse(
                         linea.item().actividad(), Long.parseLong(linea.item().codigoSin()), linea.item().codigo(),
                         linea.item().descripcion(), linea.item().cantidad(), linea.item().unidadMedida(), null,
                         linea.item().precioUnitario(), linea.item().descuento(), linea.subtotal(),
-                        linea.item().numeroSerie(), linea.item().numeroImei())).toList());
+                        linea.item().numeroSerie(), linea.item().numeroImei())).toList(),
+                registro.alta() == null ? null : registro.alta().idComplemento(),
+                registro.alta() == null ? null : registro.alta().nroSolicitud());
     }
 
     private static String tipoDocumento(int codigo) {

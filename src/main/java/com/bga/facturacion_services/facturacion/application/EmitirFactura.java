@@ -15,11 +15,13 @@ public final class EmitirFactura {
     private final ProveedorFacturacion proveedor;
     private final Factura.Emisor emisor;
     private final Clock clock;
+    private final AltaFacturaWeb altaOracle;
 
     public EmitirFactura(List<ReglaFactura> reglas, FacturaStore store, ProveedorFacturacion proveedor,
-                         Factura.Emisor emisor, Clock clock) {
+                         Factura.Emisor emisor, Clock clock, AltaFacturaWeb altaOracle) {
         this.reglas = reglas.stream().collect(Collectors.toUnmodifiableMap(ReglaFactura::tipo, Function.identity()));
         this.store = store; this.proveedor = proveedor; this.emisor = emisor; this.clock = clock;
+        this.altaOracle = altaOracle;
     }
 
     public RegistroFactura emitir(String clave, SolicitudFactura solicitud) {
@@ -33,6 +35,7 @@ public final class EmitirFactura {
         FacturaStore.Reserva reserva = store.reservar(clave, solicitud);
         if (!reserva.nueva()) return consultar(reserva.id());
         Factura factura = regla.construir(reserva.id(), reserva.numero(), OffsetDateTime.now(clock), emisorFactura, solicitud);
+        AltaFacturaWeb.Resultado alta = altaOracle.registrar(factura);
         RegistroFactura preparada = new RegistroFactura(factura, new ResultadoEmision(ResultadoEmision.Estado.PREPARADA,
                 proveedor.codigo(), proveedor.simulado(), null, "Preparada para envio", null, null, null, null));
         store.guardar(factura.id(), preparada);
@@ -43,7 +46,7 @@ public final class EmitirFactura {
             resultado = new ResultadoEmision(ResultadoEmision.Estado.PENDIENTE_CONFIRMACION,
                     proveedor.codigo(), proveedor.simulado(), null, "Resultado no confirmado; no reenviar automaticamente", null, null, null, null);
         }
-        RegistroFactura registro = new RegistroFactura(factura, resultado);
+        RegistroFactura registro = new RegistroFactura(factura, resultado, alta);
         store.guardar(factura.id(), registro);
         return registro;
     }
@@ -59,6 +62,7 @@ public final class EmitirFactura {
     }
     public static final class FacturaNoEncontrada extends RuntimeException {
         public FacturaNoEncontrada(UUID id) { super("Factura no encontrada: " + id); }
+        public FacturaNoEncontrada(long numero) { super("Factura no encontrada: " + numero); }
     }
 }
 

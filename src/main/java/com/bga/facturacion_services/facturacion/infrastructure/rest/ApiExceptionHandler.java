@@ -1,7 +1,9 @@
 package com.bga.facturacion_services.facturacion.infrastructure.rest;
 
+import com.bga.facturacion_services.facturacion.application.AltaFacturaWeb;
 import com.bga.facturacion_services.facturacion.application.EmitirFactura.FacturaNoEncontrada;
 import com.bga.facturacion_services.facturacion.infrastructure.persistence.JpaFacturaStore.Conflicto;
+import com.bga.facturacion_services.facturacion.infrastructure.provider.CatalogoProductosFeel.CatalogoNoDisponible;
 import com.bga.facturacion_services.facturacion.infrastructure.rest.EmisionCompraVentaController.EmisionNoConfirmada;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.*;
@@ -14,6 +16,8 @@ import org.springframework.web.context.request.WebRequest;
 public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(IllegalArgumentException.class)
     ProblemDetail invalida(IllegalArgumentException ex) { return problema(400, ex.getMessage()); }
+    @ExceptionHandler(AltaFacturaWeb.Rechazo.class)
+    ProblemDetail altaRechazada(AltaFacturaWeb.Rechazo ex) { return problema(400, ex.getMessage()); }
     @ExceptionHandler(FacturaNoEncontrada.class)
     ProblemDetail inexistente(FacturaNoEncontrada ex) { return problema(404, ex.getMessage()); }
     @ExceptionHandler(Conflicto.class)
@@ -24,6 +28,8 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     }
     @ExceptionHandler(EmisionNoConfirmada.class)
     ProblemDetail noConfirmada(EmisionNoConfirmada ex) { return problema(503, ex.getMessage()); }
+    @ExceptionHandler(CatalogoNoDisponible.class)
+    ProblemDetail catalogo(CatalogoNoDisponible ex) { return problema(502, ex.getMessage()); }
     @Override
     protected ResponseEntity<Object> handleMethodArgumentNotValid(MethodArgumentNotValidException ex,
             HttpHeaders headers, HttpStatusCode status, WebRequest request) {

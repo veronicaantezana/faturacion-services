@@ -9,5 +9,6 @@ public interface FacturaStore {
     Reserva reservar(String clave, SolicitudFactura solicitud);
     void guardar(UUID id, RegistroFactura registro);
     Optional<RegistroFactura> buscar(UUID id);
+    Optional<RegistroFactura> buscarPorNumero(long numero);
 }
 

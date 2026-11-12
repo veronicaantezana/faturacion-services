@@ -1,7 +1,12 @@
 package com.bga.facturacion_services.facturacion.infrastructure.rest;
 
 import com.bga.facturacion_services.facturacion.application.EmitirFactura;
+import com.bga.facturacion_services.facturacion.application.EmitirFactura.FacturaNoEncontrada;
+import com.bga.facturacion_services.facturacion.application.FacturaStore;
+import com.bga.facturacion_services.facturacion.infrastructure.pdf.FacturaPdf;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import java.net.URI;
@@ -11,8 +16,21 @@ import java.util.UUID;
 @RequestMapping("/api/v1/facturacion/facturas")
 public class EmisionCompraVentaController {
     private final EmitirFactura facturas;
+    private final FacturaStore store;
 
-    public EmisionCompraVentaController(EmitirFactura facturas) { this.facturas = facturas; }
+    public EmisionCompraVentaController(EmitirFactura facturas, FacturaStore store) {
+        this.facturas = facturas;
+        this.store = store;
+    }
+
+    @GetMapping("/{numero}/pdf")
+    public ResponseEntity<byte[]> pdf(@PathVariable long numero) {
+        var registro = store.buscarPorNumero(numero).orElseThrow(() -> new FacturaNoEncontrada(numero));
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"factura-" + numero + ".pdf\"")
+                .body(FacturaPdf.generar(registro));
+    }
 
     @PostMapping("/emitir")
     public ResponseEntity<FacturaEmitidaResponse> emitir(@Valid @RequestBody EmitirCompraVentaRequest solicitud) {

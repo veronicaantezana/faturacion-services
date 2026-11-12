@@ -54,9 +54,24 @@ public final class FeelClienteHttp {
             String detalle = mensajes(proceso.get("listaMensajes"));
             throw new FeelRechazoException(detalle.isBlank() ? "FEEL rechazo la factura" : "FEEL: " + detalle);
         }
-        return new FeelRespuesta(primero(proceso, "cuf", "Cuf"), texto(proceso.get("cufd")),
+        String cuf = primero(proceso, "cuf", "Cuf");
+        if (cuf.isBlank()) cuf = cufEnCabecera(raiz);
+        return new FeelRespuesta(cuf, texto(proceso.get("cufd")),
                 texto(proceso.get("idDocFiscalFEEL")), esVerdadero(proceso.get("fueraLinea")),
                 texto.isBlank() ? "Factura enviada a FEEL" : texto);
+    }
+
+    /** FEEL devuelve el CUF en la cabecera del documento, no en proceso. */
+    private static String cufEnCabecera(Map<String, Object> raiz) {
+        for (Object valor : raiz.values()) {
+            Map<String, Object> documento = mapa(valor);
+            if (documento == null) continue;
+            Map<String, Object> cabecera = mapa(documento.get("cabecera"));
+            if (cabecera == null) continue;
+            String cuf = primero(cabecera, "cuf", "Cuf");
+            if (!cuf.isBlank()) return cuf;
+        }
+        return "";
     }
 
     @SuppressWarnings("unchecked")

@@ -8,8 +8,16 @@ import java.util.UUID;
 public record Factura(UUID id, long numero, String tipo, OffsetDateTime fecha,
                       Emisor emisor, Cliente cliente, int metodoPago, String usuario,
                       List<Linea> detalle, BigDecimal descuentoAdicional,
-                      BigDecimal total, BigDecimal totalSujetoIva, DatosVenta venta) {
-    public Factura { detalle = List.copyOf(detalle); }
+                      BigDecimal total, BigDecimal totalSujetoIva, DatosVenta venta,
+                      int codigoDocumentoSector, FeelMetadata feel) {
+    public Factura(UUID id, long numero, String tipo, OffsetDateTime fecha,
+                   Emisor emisor, Cliente cliente, int metodoPago, String usuario,
+                   List<Linea> detalle, BigDecimal descuentoAdicional,
+                   BigDecimal total, BigDecimal totalSujetoIva, DatosVenta venta) {
+        this(id, numero, tipo, fecha, emisor, cliente, metodoPago, usuario, detalle, descuentoAdicional,
+                total, totalSujetoIva, venta, 1, FeelMetadata.compraVenta());
+    }
+    public Factura { detalle = List.copyOf(detalle); if (feel == null) feel = FeelMetadata.compraVenta(); }
     public record Emisor(String nit, String razonSocial, String municipio, String direccion,
                          int sucursal, int puntoVenta, String telefono) {
         public Emisor(String nit, String razonSocial, String municipio, String direccion, int sucursal, int puntoVenta) {

@@ -30,8 +30,10 @@ public final class CompraVenta implements ReglaFactura {
         BigDecimal montoMoneda = total.divide(cambio, 2, RoundingMode.HALF_UP);
         var venta = new Factura.DatosVenta(moneda, cambio, montoMoneda, gift, vacioNulo(s.numeroTarjeta()),
                 s.codigoExcepcion(), vacioNulo(s.cafc()), vacioNulo(s.correo()));
+        int sector = s.codigoDocumentoSector() == null ? 1 : s.codigoDocumentoSector();
+        FeelMetadata feel = s.feel() != null ? s.feel() : FeelMetadata.compraVenta();
         return new Factura(id, numero, tipo(), fecha, emisor, s.cliente(), s.metodoPago(), s.usuario(),
-                lineas, descuento, total, sujeto, venta);
+                lineas, descuento, total, sujeto, venta, sector, feel);
     }
 
     private Factura.Linea linea(Factura.Item i) {

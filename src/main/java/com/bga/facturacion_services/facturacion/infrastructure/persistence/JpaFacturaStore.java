@@ -45,6 +45,12 @@ public class JpaFacturaStore implements FacturaStore {
                 .setParameter("id", id.toString()).getResultStream()
                 .filter(e -> e.registro != null).findFirst().map(e -> leer(e.registro));
     }
+    @Transactional(readOnly = true)
+    public Optional<RegistroFactura> buscarPorNumero(long numero) {
+        return em.createQuery("select f from FacturaEntity f where f.numero = :numero", FacturaEntity.class)
+                .setParameter("numero", numero).getResultStream()
+                .filter(e -> e.registro != null).findFirst().map(e -> leer(e.registro));
+    }
     private String escribir(Object valor) {
         try { return json.writeValueAsString(valor); }
         catch (Exception ex) { throw new IllegalStateException("No se pudo serializar la factura", ex); }
