@@ -1,6 +1,10 @@
 package com.bga.facturacion_services.facturacion.infrastructure.rest;
 
 import com.bga.facturacion_services.facturacion.application.AltaFacturaWeb;
+import com.bga.facturacion_services.facturacion.application.RegistrarEmpresa;
+import com.bga.facturacion_services.facturacion.application.puntoventa.RegistrarPuntoVenta;
+import com.bga.facturacion_services.facturacion.infrastructure.persistence.PuntoVentaOracle;
+import com.bga.facturacion_services.facturacion.application.sucursal.RegistrarSucursal;
 import com.bga.facturacion_services.facturacion.application.EmitirFactura.FacturaNoEncontrada;
 import com.bga.facturacion_services.facturacion.infrastructure.persistence.JpaFacturaStore.Conflicto;
 import com.bga.facturacion_services.facturacion.infrastructure.provider.CatalogoProductosFeel.CatalogoNoDisponible;
@@ -22,6 +26,14 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     ProblemDetail inexistente(FacturaNoEncontrada ex) { return problema(404, ex.getMessage()); }
     @ExceptionHandler(Conflicto.class)
     ProblemDetail conflicto(Conflicto ex) { return problema(409, ex.getMessage()); }
+    @ExceptionHandler(RegistrarEmpresa.NitRegistrado.class)
+    ProblemDetail nitRegistrado(RegistrarEmpresa.NitRegistrado ex) { return problema(409, ex.getMessage()); }
+    @ExceptionHandler(RegistrarSucursal.PuntoRegistrado.class)
+    ProblemDetail puntoRegistrado(RegistrarSucursal.PuntoRegistrado ex) { return problema(409, ex.getMessage()); }
+    @ExceptionHandler(RegistrarPuntoVenta.PuntoExistente.class)
+    ProblemDetail puntoExistente(RegistrarPuntoVenta.PuntoExistente ex) { return problema(409, ex.getMessage()); }
+    @ExceptionHandler(PuntoVentaOracle.ConsultaRechazada.class)
+    ProblemDetail consultaRechazada(PuntoVentaOracle.ConsultaRechazada ex) { return problema(500, ex.getMessage()); }
     @ExceptionHandler(DataIntegrityViolationException.class)
     ProblemDetail duplicada(DataIntegrityViolationException ex) {
         return problema(409, "Solicitud concurrente; reintente con la misma Idempotency-Key");
