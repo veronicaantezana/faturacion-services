@@ -2,8 +2,8 @@ package com.bga.facturacion_services.facturacion.infrastructure.persistence;
 
 import com.bga.facturacion_services.facturacion.infrastructure.rest.EmpresaResponse;
 import com.bga.facturacion_services.facturacion.infrastructure.rest.RegistrarEmpresaRequest;
+import java.sql.CallableStatement;
 import java.sql.Connection;
-import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -17,13 +17,10 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public class EmpresaOracle {
-    private static final String COLUMNAS = """
-            ID_EMPRESA, NIT, NOMBRE, ESTADO, MODALIDAD, CODIGO_AUTORIZACION, KEY_NAME, CODIGO_SISTEMA,
-            ADMIN_SEQUENCE, ADMIN_SEQ_NOTA, LAST_USER, LAST_STAMP, ENVIAR_CORREO, COMPLETAR_DATOS,
-            URL_DESCARGA, DEST_NOTIFICACION, DOC_SECTOR_VALIDATE, GENERAR_PDF, TOKEN_ENABLED,
-            CORREO_INDIVIDUAL, PLAN_VIGENTE, PERIODO_PAGO, MAX_FACTURAS, CONCILIACION, NOMBRECOMERCIAL,
-            FUNCIONALIDA, GENERAR_PDF_COD_SISTEMA
-            """;
+    private static final int CURSOR = -10;
+    private static final String LISTAR = "{ call FACTURACION.PKG_REGISTRO.SPR_LISTAR_EMPRESAS(?,?,?) }";
+    private static final String REGISTRAR = "{ call FACTURACION.PKG_REGISTRO.SPR_REGISTRAR_EMPRESA("
+            + "?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) }";
 
     private final DataSource oracle;
 
@@ -32,90 +29,80 @@ public class EmpresaOracle {
     }
 
     public List<EmpresaResponse> listar() {
-        String sql = "SELECT " + COLUMNAS + " FROM FACTURACION.F_EMPRESA ORDER BY ID_EMPRESA";
         try (Connection con = oracle.getConnection();
-             PreparedStatement ps = con.prepareStatement(sql);
-             ResultSet rs = ps.executeQuery()) {
-            var empresas = new ArrayList<EmpresaResponse>();
-            while (rs.next()) empresas.add(mapear(rs));
-            return empresas;
+             CallableStatement llamada = con.prepareCall(LISTAR)) {
+            llamada.registerOutParameter(1, CURSOR);
+            llamada.registerOutParameter(2, Types.NUMERIC);
+            llamada.registerOutParameter(3, Types.VARCHAR);
+            llamada.execute();
+            exigir(llamada, 2, 3);
+            try (ResultSet rs = (ResultSet) llamada.getObject(1)) {
+                var empresas = new ArrayList<EmpresaResponse>();
+                while (rs.next()) empresas.add(mapear(rs));
+                return empresas;
+            }
         } catch (SQLException ex) {
-            throw new IllegalStateException("No se pudo leer FACTURACION.F_EMPRESA", ex);
+            throw new IllegalStateException("No se pudo leer las empresas por FACTURACION.PKG_REGISTRO", ex);
         }
     }
 
     public boolean existeNit(String nit) {
-        String sql = "SELECT 1 FROM FACTURACION.F_EMPRESA WHERE NIT = ?";
-        try (Connection con = oracle.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
-            ps.setString(1, nit);
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next();
-            }
-        } catch (SQLException ex) {
-            throw new IllegalStateException("No se pudo consultar el NIT en FACTURACION.F_EMPRESA", ex);
-        }
+        return listar().stream().anyMatch(empresa -> nit.equals(empresa.nit()));
     }
 
     public EmpresaResponse insertar(RegistrarEmpresaRequest solicitud, String usuario) {
-        String sql = """
-                INSERT INTO FACTURACION.F_EMPRESA (
-                    ID_EMPRESA, NIT, NOMBRE, ESTADO, MODALIDAD, CODIGO_AUTORIZACION, KEY_NAME, CODIGO_SISTEMA,
-                    ADMIN_SEQUENCE, ADMIN_SEQ_NOTA, LAST_USER, LAST_STAMP, ENVIAR_CORREO, COMPLETAR_DATOS,
-                    URL_DESCARGA, DEST_NOTIFICACION, DOC_SECTOR_VALIDATE, GENERAR_PDF, TOKEN_ENABLED,
-                    CORREO_INDIVIDUAL, PLAN_VIGENTE, PERIODO_PAGO, MAX_FACTURAS, CONCILIACION, NOMBRECOMERCIAL,
-                    FUNCIONALIDA, GENERAR_PDF_COD_SISTEMA
-                ) VALUES (
-                    FACTURACION.S_F_EMPRESA.NEXTVAL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, SYSTIMESTAMP,
-                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
-                )
-                """;
         try (Connection con = oracle.getConnection()) {
             con.setAutoCommit(false);
-            try (PreparedStatement ps = con.prepareStatement(sql)) {
-                int i = 1;
-                ps.setString(i++, solicitud.nit().trim());
-                ps.setString(i++, solicitud.nombre().trim());
-                ps.setString(i++, solicitud.estado().trim());
-                ps.setInt(i++, solicitud.modalidad());
-                texto(ps, i++, solicitud.codigoAutorizacion());
-                texto(ps, i++, solicitud.keyName());
-                texto(ps, i++, solicitud.codigoSistema());
-                entero(ps, i++, solicitud.adminSequence());
-                entero(ps, i++, solicitud.adminSeqNota());
-                ps.setString(i++, usuario);
-                entero(ps, i++, solicitud.enviarCorreo());
-                entero(ps, i++, solicitud.completarDatos());
-                texto(ps, i++, solicitud.urlDescarga());
-                texto(ps, i++, solicitud.destNotificacion());
-                texto(ps, i++, solicitud.docSectorValidate());
-                entero(ps, i++, solicitud.generarPdf());
-                entero(ps, i++, solicitud.tokenEnabled());
-                entero(ps, i++, solicitud.correoIndividual());
-                texto(ps, i++, solicitud.planVigente());
-                texto(ps, i++, solicitud.periodoPago());
-                entero(ps, i++, solicitud.maxFacturas());
-                entero(ps, i++, solicitud.conciliacion());
-                texto(ps, i++, solicitud.nombreComercial());
-                entero(ps, i++, solicitud.funcionalida());
-                entero(ps, i, solicitud.generarPdfCodSistema());
-                ps.executeUpdate();
+            try (CallableStatement llamada = con.prepareCall(REGISTRAR)) {
+                texto(llamada, 1, solicitud.nit());
+                texto(llamada, 2, solicitud.nombre());
+                texto(llamada, 3, solicitud.estado());
+                llamada.setInt(4, solicitud.modalidad());
+                texto(llamada, 5, usuario);
+                texto(llamada, 6, solicitud.codigoAutorizacion());
+                texto(llamada, 7, solicitud.keyName());
+                texto(llamada, 8, solicitud.codigoSistema());
+                entero(llamada, 9, solicitud.adminSequence());
+                entero(llamada, 10, solicitud.adminSeqNota());
+                entero(llamada, 11, solicitud.enviarCorreo());
+                entero(llamada, 12, solicitud.completarDatos());
+                texto(llamada, 13, solicitud.urlDescarga());
+                texto(llamada, 14, solicitud.destNotificacion());
+                texto(llamada, 15, solicitud.docSectorValidate());
+                entero(llamada, 16, solicitud.generarPdf());
+                entero(llamada, 17, solicitud.tokenEnabled());
+                entero(llamada, 18, solicitud.correoIndividual());
+                texto(llamada, 19, solicitud.planVigente());
+                texto(llamada, 20, solicitud.periodoPago());
+                entero(llamada, 21, solicitud.maxFacturas());
+                entero(llamada, 22, solicitud.conciliacion());
+                texto(llamada, 23, solicitud.nombreComercial());
+                entero(llamada, 24, solicitud.funcionalida());
+                entero(llamada, 25, solicitud.generarPdfCodSistema());
+                llamada.registerOutParameter(26, Types.NUMERIC);
+                llamada.registerOutParameter(27, Types.NUMERIC);
+                llamada.registerOutParameter(28, Types.VARCHAR);
+                llamada.execute();
+                exigir(llamada, 27, 28);
+                long idEmpresa = llamada.getLong(26);
+                con.commit();
+                return listar().stream()
+                        .filter(empresa -> empresa.idEmpresa() == idEmpresa)
+                        .findFirst()
+                        .orElseThrow(() -> new IllegalStateException("La empresa no quedo registrada"));
+            } catch (RuntimeException ex) {
+                con.rollback();
+                throw ex;
             }
-            EmpresaResponse creada = buscarPorNit(con, solicitud.nit().trim());
-            con.commit();
-            return creada;
         } catch (SQLException ex) {
-            throw new IllegalStateException("No se pudo registrar la empresa en FACTURACION.F_EMPRESA", ex);
+            throw new IllegalStateException("No se pudo registrar la empresa por FACTURACION.PKG_REGISTRO", ex);
         }
     }
 
-    private EmpresaResponse buscarPorNit(Connection con, String nit) throws SQLException {
-        String sql = "SELECT " + COLUMNAS + " FROM FACTURACION.F_EMPRESA WHERE NIT = ? ORDER BY ID_EMPRESA DESC";
-        try (PreparedStatement ps = con.prepareStatement(sql)) {
-            ps.setString(1, nit);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (!rs.next()) throw new SQLException("La empresa no quedo registrada");
-                return mapear(rs);
-            }
+    private static void exigir(CallableStatement llamada, int codigo, int descripcion) throws SQLException {
+        int resultado = llamada.getInt(codigo);
+        if (llamada.wasNull() || resultado != 0) {
+            throw new IllegalStateException(llamada.getString(descripcion));
         }
     }
 
@@ -156,13 +143,13 @@ public class EmpresaOracle {
         return rs.wasNull() ? null : valor;
     }
 
-    private static void texto(PreparedStatement ps, int indice, String valor) throws SQLException {
-        if (valor == null || valor.isBlank()) ps.setNull(indice, Types.VARCHAR);
-        else ps.setString(indice, valor.trim());
+    private static void texto(CallableStatement llamada, int indice, String valor) throws SQLException {
+        if (valor == null || valor.isBlank()) llamada.setNull(indice, Types.VARCHAR);
+        else llamada.setString(indice, valor.trim());
     }
 
-    private static void entero(PreparedStatement ps, int indice, Integer valor) throws SQLException {
-        if (valor == null) ps.setNull(indice, Types.NUMERIC);
-        else ps.setInt(indice, valor);
+    private static void entero(CallableStatement llamada, int indice, Integer valor) throws SQLException {
+        if (valor == null) llamada.setNull(indice, Types.NUMERIC);
+        else llamada.setInt(indice, valor);
     }
 }

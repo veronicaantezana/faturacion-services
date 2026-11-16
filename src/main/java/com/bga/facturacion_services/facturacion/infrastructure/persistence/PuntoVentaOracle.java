@@ -3,9 +3,9 @@ package com.bga.facturacion_services.facturacion.infrastructure.persistence;
 import com.bga.facturacion_services.facturacion.application.puntoventa.NuevoPuntoVenta;
 import com.bga.facturacion_services.facturacion.application.puntoventa.PuntoVenta;
 import com.bga.facturacion_services.facturacion.application.puntoventa.PuntoVentaRepositorio;
+import java.sql.CallableStatement;
 import java.sql.Connection;
 import java.sql.Date;
-import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -20,160 +20,104 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public class PuntoVentaOracle implements PuntoVentaRepositorio {
-    private static final String COLUMNAS = """
-            p.ID_POS, p.ID_CONFIG, c.ID_EMPRESA, e.NOMBRE, e.NIT, c.CODIGO, c.REFERENCIA, c.SUCURSAL,
-            p.DESCRIPCION, p.DIRECCION_IP, p.POS, p.TIPO_PUNTO_VENTA, p.NOMBRE_PUNTO_VENTA, p.TIPO_PING,
-            p.ENABLED, p.LAST_USER, p.LAST_STAMP, p.NUMERO_CONTRATO, p.NIT_COMISIONISTA,
-            p.FECHA_INICIO, p.FECHA_FIN, p.OBTENER_CUFD, p.ESTADO_SIAT
-            """;
+    private static final int CURSOR = -10;
+    private static final String LISTAR = "{ call FACTURACION.PKG_REGISTRO.SPR_LISTAR_PUNTOS_VENTA(?,?,?) }";
+    private static final String LISTAR_SUCURSALES = "{ call FACTURACION.PKG_REGISTRO.SPR_LISTAR_SUCURSALES(?,?,?) }";
+    private static final String REGISTRAR = "{ call FACTURACION.PKG_REGISTRO.SPR_REGISTRAR_PUNTO_VENTA("
+            + "?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) }";
 
     private final DataSource oracle;
-    private volatile String secuencia;
 
     public PuntoVentaOracle(@Qualifier("facturacionDataSource") DataSource oracle) {
         this.oracle = oracle;
     }
 
     public List<PuntoVenta> listar() {
-        String sql = "SELECT " + COLUMNAS + """
-                 FROM FACTURACION.F_POS p
-                 LEFT JOIN FACTURACION.F_CONFIG c ON c.ID_CONFIG = p.ID_CONFIG
-                 LEFT JOIN FACTURACION.F_EMPRESA e ON e.ID_EMPRESA = c.ID_EMPRESA
-                 ORDER BY p.ID_POS DESC
-                """;
         try (Connection con = oracle.getConnection();
-             PreparedStatement ps = con.prepareStatement(sql);
-             ResultSet rs = ps.executeQuery()) {
-            var lista = new ArrayList<PuntoVenta>();
-            while (rs.next()) lista.add(mapear(rs));
-            return lista;
+             CallableStatement llamada = con.prepareCall(LISTAR)) {
+            llamada.registerOutParameter(1, CURSOR);
+            llamada.registerOutParameter(2, Types.NUMERIC);
+            llamada.registerOutParameter(3, Types.VARCHAR);
+            llamada.execute();
+            exigir(llamada, 2, 3);
+            try (ResultSet rs = (ResultSet) llamada.getObject(1)) {
+                var lista = new ArrayList<PuntoVenta>();
+                while (rs.next()) lista.add(mapear(rs));
+                return lista;
+            }
         } catch (SQLException ex) {
-            throw new ConsultaRechazada("No se pudo leer FACTURACION.F_POS. " + ex.getMessage()
-                    + ". " + diagnostico());
+            throw new IllegalStateException("No se pudo leer los puntos de venta por FACTURACION.PKG_REGISTRO", ex);
         }
     }
 
     public SucursalVinculo buscarSucursal(long idConfig) {
-        String sql = "SELECT ID_CONFIG, SUCURSAL, POS FROM FACTURACION.F_CONFIG WHERE ID_CONFIG = ?";
-        try (Connection con = oracle.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
-            ps.setLong(1, idConfig);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (!rs.next()) return null;
-                return new SucursalVinculo(rs.getLong("ID_CONFIG"), rs.getInt("SUCURSAL"), rs.getInt("POS"));
+        try (Connection con = oracle.getConnection();
+             CallableStatement llamada = con.prepareCall(LISTAR_SUCURSALES)) {
+            llamada.registerOutParameter(1, CURSOR);
+            llamada.registerOutParameter(2, Types.NUMERIC);
+            llamada.registerOutParameter(3, Types.VARCHAR);
+            llamada.execute();
+            exigir(llamada, 2, 3);
+            try (ResultSet rs = (ResultSet) llamada.getObject(1)) {
+                while (rs.next()) {
+                    if (rs.getLong("ID_CONFIG") == idConfig) {
+                        return new SucursalVinculo(idConfig, rs.getInt("SUCURSAL"), rs.getInt("POS"));
+                    }
+                }
+                return null;
             }
         } catch (SQLException ex) {
-            throw new IllegalStateException("No se pudo consultar la sucursal en FACTURACION.F_CONFIG", ex);
+            throw new IllegalStateException("No se pudo consultar la sucursal por FACTURACION.PKG_REGISTRO", ex);
         }
     }
 
     public boolean existeParaConfig(long idConfig) {
-        String sql = "SELECT 1 FROM FACTURACION.F_POS WHERE ID_CONFIG = ?";
-        try (Connection con = oracle.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
-            ps.setLong(1, idConfig);
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next();
-            }
-        } catch (SQLException ex) {
-            throw new IllegalStateException("No se pudo consultar el punto de venta en FACTURACION.F_POS", ex);
-        }
+        return listar().stream().anyMatch(punto -> punto.idConfig() == idConfig);
     }
 
     public PuntoVenta insertar(NuevoPuntoVenta punto, String usuario) {
-        String sql = """
-                INSERT INTO FACTURACION.F_POS (
-                    ID_POS, ID_CONFIG, DESCRIPCION, DIRECCION_IP, POS, TIPO_PUNTO_VENTA, NOMBRE_PUNTO_VENTA,
-                    TIPO_PING, ENABLED, LAST_USER, LAST_STAMP, NUMERO_CONTRATO, NIT_COMISIONISTA,
-                    FECHA_INICIO, FECHA_FIN, OBTENER_CUFD, ESTADO_SIAT
-                ) VALUES (
-                    %s.NEXTVAL, ?, ?, ?, ?, ?, ?, ?, ?, ?, SYSTIMESTAMP, ?, ?, ?, ?, ?, ?
-                )
-                """.formatted(secuencia());
         try (Connection con = oracle.getConnection()) {
             con.setAutoCommit(false);
-            try (PreparedStatement ps = con.prepareStatement(sql)) {
-                int i = 1;
-                ps.setLong(i++, punto.idConfig());
-                ps.setString(i++, punto.descripcion().trim());
-                texto(ps, i++, punto.direccionIp());
-                ps.setInt(i++, punto.pos());
-                ps.setInt(i++, punto.tipoPuntoVenta());
-                ps.setString(i++, punto.nombrePuntoVenta().trim());
-                ps.setInt(i++, punto.tipoPing());
-                ps.setInt(i++, punto.enabled());
-                ps.setString(i++, usuario);
-                texto(ps, i++, punto.numeroContrato());
-                texto(ps, i++, punto.nitComisionista());
-                fecha(ps, i++, punto.fechaInicio());
-                fecha(ps, i++, punto.fechaFin());
-                entero(ps, i++, punto.obtenerCufd());
-                entero(ps, i, punto.estadoSiat());
-                ps.executeUpdate();
+            try (CallableStatement llamada = con.prepareCall(REGISTRAR)) {
+                llamada.setLong(1, punto.idConfig());
+                texto(llamada, 2, punto.descripcion());
+                llamada.setInt(3, punto.pos());
+                llamada.setInt(4, punto.tipoPuntoVenta());
+                texto(llamada, 5, punto.nombrePuntoVenta());
+                llamada.setInt(6, punto.tipoPing());
+                llamada.setInt(7, punto.enabled());
+                texto(llamada, 8, usuario);
+                texto(llamada, 9, punto.direccionIp());
+                texto(llamada, 10, punto.numeroContrato());
+                texto(llamada, 11, punto.nitComisionista());
+                fecha(llamada, 12, punto.fechaInicio());
+                fecha(llamada, 13, punto.fechaFin());
+                entero(llamada, 14, punto.obtenerCufd());
+                entero(llamada, 15, punto.estadoSiat());
+                llamada.registerOutParameter(16, Types.NUMERIC);
+                llamada.registerOutParameter(17, Types.NUMERIC);
+                llamada.registerOutParameter(18, Types.VARCHAR);
+                llamada.execute();
+                exigir(llamada, 17, 18);
+                long idPos = llamada.getLong(16);
+                con.commit();
+                return listar().stream()
+                        .filter(fila -> fila.idPos() == idPos)
+                        .findFirst()
+                        .orElseThrow(() -> new IllegalStateException("El punto de venta no quedo registrado"));
+            } catch (RuntimeException ex) {
+                con.rollback();
+                throw ex;
             }
-            PuntoVenta creado = buscar(con, punto.idConfig());
-            con.commit();
-            return creado;
         } catch (SQLException ex) {
-            throw new IllegalStateException("No se pudo registrar el punto de venta en FACTURACION.F_POS", ex);
+            throw new IllegalStateException("No se pudo registrar el punto de venta por FACTURACION.PKG_REGISTRO", ex);
         }
     }
 
-    private PuntoVenta buscar(Connection con, long idConfig) throws SQLException {
-        String sql = "SELECT " + COLUMNAS + """
-                 FROM FACTURACION.F_POS p
-                 LEFT JOIN FACTURACION.F_CONFIG c ON c.ID_CONFIG = p.ID_CONFIG
-                 LEFT JOIN FACTURACION.F_EMPRESA e ON e.ID_EMPRESA = c.ID_EMPRESA
-                 WHERE p.ID_CONFIG = ?
-                """;
-        try (PreparedStatement ps = con.prepareStatement(sql)) {
-            ps.setLong(1, idConfig);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (!rs.next()) throw new SQLException("El punto de venta no quedo registrado");
-                return mapear(rs);
-            }
-        }
-    }
-
-    private String diagnostico() {
-        String sql = """
-                SELECT SYS_CONTEXT('USERENV','SESSION_USER') AS SESION,
-                       (SELECT LISTAGG(owner || ' ' || object_type, ', ') WITHIN GROUP (ORDER BY owner)
-                          FROM all_objects WHERE object_name = 'F_POS') AS OBJETOS,
-                       (SELECT LISTAGG(grantee || ' ' || privilege, ', ') WITHIN GROUP (ORDER BY grantee)
-                          FROM all_tab_privs WHERE table_name = 'F_POS') AS PRIVILEGIOS
-                FROM dual
-                """;
-        try (Connection con = oracle.getConnection();
-             PreparedStatement ps = con.prepareStatement(sql);
-             ResultSet rs = ps.executeQuery()) {
-            if (!rs.next()) return "Sin diagnostico de privilegios";
-            String objetos = rs.getString("OBJETOS");
-            String privilegios = rs.getString("PRIVILEGIOS");
-            return "Sesion " + rs.getString("SESION")
-                    + ". Objetos F_POS visibles: " + (objetos == null ? "ninguno" : objetos)
-                    + ". Privilegios: " + (privilegios == null ? "ninguno" : privilegios);
-        } catch (SQLException ex) {
-            return "No se pudo leer el diagnostico de privilegios: " + ex.getMessage();
-        }
-    }
-
-    private String secuencia() {
-        String conocida = secuencia;
-        if (conocida != null) return conocida;
-        String sql = """
-                SELECT sequence_owner || '.' || sequence_name
-                FROM all_sequences
-                WHERE sequence_owner = 'FACTURACION'
-                  AND sequence_name IN ('S_F_POS', 'SEQ_F_POS', 'S_POS')
-                ORDER BY CASE sequence_name WHEN 'S_F_POS' THEN 1 WHEN 'SEQ_F_POS' THEN 2 ELSE 3 END
-                """;
-        try (Connection con = oracle.getConnection();
-             PreparedStatement ps = con.prepareStatement(sql);
-             ResultSet rs = ps.executeQuery()) {
-            if (!rs.next()) throw new IllegalStateException("No existe la secuencia de FACTURACION.F_POS");
-            secuencia = rs.getString(1);
-            return secuencia;
-        } catch (SQLException ex) {
-            throw new IllegalStateException("No se pudo ubicar la secuencia de FACTURACION.F_POS", ex);
+    private static void exigir(CallableStatement llamada, int codigo, int descripcion) throws SQLException {
+        int resultado = llamada.getInt(codigo);
+        if (llamada.wasNull() || resultado != 0) {
+            throw new IllegalStateException(llamada.getString(descripcion));
         }
     }
 
@@ -220,22 +164,18 @@ public class PuntoVentaOracle implements PuntoVentaRepositorio {
         return valor == null ? null : valor.toLocalDate();
     }
 
-    private static void texto(PreparedStatement ps, int indice, String valor) throws SQLException {
-        if (valor == null || valor.isBlank()) ps.setNull(indice, Types.VARCHAR);
-        else ps.setString(indice, valor.trim());
+    private static void texto(CallableStatement llamada, int indice, String valor) throws SQLException {
+        if (valor == null || valor.isBlank()) llamada.setNull(indice, Types.VARCHAR);
+        else llamada.setString(indice, valor.trim());
     }
 
-    private static void entero(PreparedStatement ps, int indice, Integer valor) throws SQLException {
-        if (valor == null) ps.setNull(indice, Types.NUMERIC);
-        else ps.setInt(indice, valor);
+    private static void entero(CallableStatement llamada, int indice, Integer valor) throws SQLException {
+        if (valor == null) llamada.setNull(indice, Types.NUMERIC);
+        else llamada.setInt(indice, valor);
     }
 
-    public static final class ConsultaRechazada extends RuntimeException {
-        public ConsultaRechazada(String message) { super(message); }
-    }
-
-    private static void fecha(PreparedStatement ps, int indice, LocalDate valor) throws SQLException {
-        if (valor == null) ps.setNull(indice, Types.DATE);
-        else ps.setDate(indice, Date.valueOf(valor));
+    private static void fecha(CallableStatement llamada, int indice, LocalDate valor) throws SQLException {
+        if (valor == null) llamada.setNull(indice, Types.DATE);
+        else llamada.setDate(indice, Date.valueOf(valor));
     }
 }

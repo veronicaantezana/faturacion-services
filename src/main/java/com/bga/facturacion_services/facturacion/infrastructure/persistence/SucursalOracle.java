@@ -3,8 +3,8 @@ package com.bga.facturacion_services.facturacion.infrastructure.persistence;
 import com.bga.facturacion_services.facturacion.application.sucursal.NuevaSucursal;
 import com.bga.facturacion_services.facturacion.application.sucursal.Sucursal;
 import com.bga.facturacion_services.facturacion.application.sucursal.SucursalRepositorio;
+import java.sql.CallableStatement;
 import java.sql.Connection;
-import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -18,138 +18,102 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public class SucursalOracle implements SucursalRepositorio {
-    private static final String COLUMNAS = """
-            c.ID_CONFIG, c.ID_EMPRESA, e.NOMBRE, e.NIT, c.CODIGO, c.REFERENCIA, c.SUCURSAL, c.POS,
-            c.DIRECCION, c.NRO_DOC_SEQUENCE, c.NRO_NOTA_SEQUENCE, c.ENABLED, c.LAST_USER, c.LAST_STAMP,
-            c.HORA_CUFD, c.TELEFONO, c.MUNICIPIO, c.KEYNAME
-            """;
+    private static final int CURSOR = -10;
+    private static final String LISTAR = "{ call FACTURACION.PKG_REGISTRO.SPR_LISTAR_SUCURSALES(?,?,?) }";
+    private static final String LISTAR_EMPRESAS = "{ call FACTURACION.PKG_REGISTRO.SPR_LISTAR_EMPRESAS(?,?,?) }";
+    private static final String REGISTRAR = "{ call FACTURACION.PKG_REGISTRO.SPR_REGISTRAR_SUCURSAL("
+            + "?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) }";
 
     private final DataSource oracle;
-    private volatile String secuencia;
 
     public SucursalOracle(@Qualifier("facturacionDataSource") DataSource oracle) {
         this.oracle = oracle;
     }
 
     public List<Sucursal> listar() {
-        String sql = "SELECT " + COLUMNAS + """
-                 FROM FACTURACION.F_CONFIG c
-                 LEFT JOIN FACTURACION.F_EMPRESA e ON e.ID_EMPRESA = c.ID_EMPRESA
-                 ORDER BY c.ID_EMPRESA, c.SUCURSAL, c.POS
-                """;
         try (Connection con = oracle.getConnection();
-             PreparedStatement ps = con.prepareStatement(sql);
-             ResultSet rs = ps.executeQuery()) {
-            var lista = new ArrayList<Sucursal>();
-            while (rs.next()) lista.add(mapear(rs));
-            return lista;
+             CallableStatement llamada = con.prepareCall(LISTAR)) {
+            llamada.registerOutParameter(1, CURSOR);
+            llamada.registerOutParameter(2, Types.NUMERIC);
+            llamada.registerOutParameter(3, Types.VARCHAR);
+            llamada.execute();
+            exigir(llamada, 2, 3);
+            try (ResultSet rs = (ResultSet) llamada.getObject(1)) {
+                var lista = new ArrayList<Sucursal>();
+                while (rs.next()) lista.add(mapear(rs));
+                return lista;
+            }
         } catch (SQLException ex) {
-            throw new IllegalStateException("No se pudo leer FACTURACION.F_CONFIG", ex);
+            throw new IllegalStateException("No se pudo leer las sucursales por FACTURACION.PKG_REGISTRO", ex);
         }
     }
 
     public boolean existeEmpresa(long idEmpresa) {
-        return existe("SELECT 1 FROM FACTURACION.F_EMPRESA WHERE ID_EMPRESA = ?", idEmpresa);
+        try (Connection con = oracle.getConnection();
+             CallableStatement llamada = con.prepareCall(LISTAR_EMPRESAS)) {
+            llamada.registerOutParameter(1, CURSOR);
+            llamada.registerOutParameter(2, Types.NUMERIC);
+            llamada.registerOutParameter(3, Types.VARCHAR);
+            llamada.execute();
+            exigir(llamada, 2, 3);
+            try (ResultSet rs = (ResultSet) llamada.getObject(1)) {
+                while (rs.next()) {
+                    if (rs.getLong("ID_EMPRESA") == idEmpresa) return true;
+                }
+                return false;
+            }
+        } catch (SQLException ex) {
+            throw new IllegalStateException("No se pudo consultar la empresa por FACTURACION.PKG_REGISTRO", ex);
+        }
     }
 
     public boolean existePunto(long idEmpresa, int sucursal, int pos) {
-        String sql = "SELECT 1 FROM FACTURACION.F_CONFIG WHERE ID_EMPRESA = ? AND SUCURSAL = ? AND POS = ?";
-        try (Connection con = oracle.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
-            ps.setLong(1, idEmpresa);
-            ps.setInt(2, sucursal);
-            ps.setInt(3, pos);
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next();
-            }
-        } catch (SQLException ex) {
-            throw new IllegalStateException("No se pudo consultar la sucursal en FACTURACION.F_CONFIG", ex);
-        }
+        return listar().stream().anyMatch(fila ->
+                fila.idEmpresa() == idEmpresa && fila.sucursal() == sucursal && fila.pos() == pos);
     }
 
     public Sucursal insertar(NuevaSucursal sucursal, String usuario) {
-        String sql = """
-                INSERT INTO FACTURACION.F_CONFIG (
-                    ID_CONFIG, ID_EMPRESA, CODIGO, REFERENCIA, SUCURSAL, POS, DIRECCION,
-                    NRO_DOC_SEQUENCE, NRO_NOTA_SEQUENCE, ENABLED, LAST_USER, LAST_STAMP,
-                    HORA_CUFD, TELEFONO, MUNICIPIO, KEYNAME
-                ) VALUES (
-                    %s.NEXTVAL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, SYSTIMESTAMP, ?, ?, ?, ?
-                )
-                """.formatted(secuencia());
         try (Connection con = oracle.getConnection()) {
             con.setAutoCommit(false);
-            try (PreparedStatement ps = con.prepareStatement(sql)) {
-                int i = 1;
-                ps.setLong(i++, sucursal.idEmpresa());
-                ps.setString(i++, sucursal.codigo().trim());
-                ps.setString(i++, sucursal.referencia().trim());
-                ps.setInt(i++, sucursal.sucursal());
-                ps.setInt(i++, sucursal.pos());
-                ps.setString(i++, sucursal.direccion().trim());
-                ps.setLong(i++, sucursal.nroDocSequence());
-                ps.setLong(i++, sucursal.nroNotaSequence());
-                ps.setInt(i++, sucursal.enabled());
-                ps.setString(i++, usuario);
-                entero(ps, i++, sucursal.horaCufd());
-                texto(ps, i++, sucursal.telefono());
-                texto(ps, i++, sucursal.municipio());
-                texto(ps, i, sucursal.keyName());
-                ps.executeUpdate();
+            try (CallableStatement llamada = con.prepareCall(REGISTRAR)) {
+                llamada.setLong(1, sucursal.idEmpresa());
+                texto(llamada, 2, sucursal.codigo());
+                texto(llamada, 3, sucursal.referencia());
+                llamada.setInt(4, sucursal.sucursal());
+                llamada.setInt(5, sucursal.pos());
+                texto(llamada, 6, sucursal.direccion());
+                llamada.setLong(7, sucursal.nroDocSequence());
+                llamada.setLong(8, sucursal.nroNotaSequence());
+                llamada.setInt(9, sucursal.enabled());
+                texto(llamada, 10, usuario);
+                entero(llamada, 11, sucursal.horaCufd());
+                texto(llamada, 12, sucursal.telefono());
+                texto(llamada, 13, sucursal.municipio());
+                texto(llamada, 14, sucursal.keyName());
+                llamada.registerOutParameter(15, Types.NUMERIC);
+                llamada.registerOutParameter(16, Types.NUMERIC);
+                llamada.registerOutParameter(17, Types.VARCHAR);
+                llamada.execute();
+                exigir(llamada, 16, 17);
+                long idConfig = llamada.getLong(15);
+                con.commit();
+                return listar().stream()
+                        .filter(fila -> fila.idConfig() == idConfig)
+                        .findFirst()
+                        .orElseThrow(() -> new IllegalStateException("La sucursal no quedo registrada"));
+            } catch (RuntimeException ex) {
+                con.rollback();
+                throw ex;
             }
-            Sucursal creada = buscar(con, sucursal.idEmpresa(), sucursal.sucursal(), sucursal.pos());
-            con.commit();
-            return creada;
         } catch (SQLException ex) {
-            throw new IllegalStateException("No se pudo registrar la sucursal en FACTURACION.F_CONFIG", ex);
+            throw new IllegalStateException("No se pudo registrar la sucursal por FACTURACION.PKG_REGISTRO", ex);
         }
     }
 
-    private Sucursal buscar(Connection con, long idEmpresa, int sucursal, int pos) throws SQLException {
-        String sql = "SELECT " + COLUMNAS + """
-                 FROM FACTURACION.F_CONFIG c
-                 LEFT JOIN FACTURACION.F_EMPRESA e ON e.ID_EMPRESA = c.ID_EMPRESA
-                 WHERE c.ID_EMPRESA = ? AND c.SUCURSAL = ? AND c.POS = ?
-                """;
-        try (PreparedStatement ps = con.prepareStatement(sql)) {
-            ps.setLong(1, idEmpresa);
-            ps.setInt(2, sucursal);
-            ps.setInt(3, pos);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (!rs.next()) throw new SQLException("La sucursal no quedo registrada");
-                return mapear(rs);
-            }
-        }
-    }
-
-    private String secuencia() {
-        String conocida = secuencia;
-        if (conocida != null) return conocida;
-        String sql = """
-                SELECT sequence_owner || '.' || sequence_name
-                FROM all_sequences
-                WHERE sequence_owner = 'FACTURACION'
-                  AND sequence_name IN ('S_F_CONFIG', 'SEQ_F_CONFIG', 'S_CONFIG')
-                ORDER BY CASE sequence_name WHEN 'S_F_CONFIG' THEN 1 WHEN 'SEQ_F_CONFIG' THEN 2 ELSE 3 END
-                """;
-        try (Connection con = oracle.getConnection();
-             PreparedStatement ps = con.prepareStatement(sql);
-             ResultSet rs = ps.executeQuery()) {
-            if (!rs.next()) throw new IllegalStateException("No existe la secuencia de FACTURACION.F_CONFIG");
-            secuencia = rs.getString(1);
-            return secuencia;
-        } catch (SQLException ex) {
-            throw new IllegalStateException("No se pudo ubicar la secuencia de FACTURACION.F_CONFIG", ex);
-        }
-    }
-
-    private boolean existe(String sql, long id) {
-        try (Connection con = oracle.getConnection(); PreparedStatement ps = con.prepareStatement(sql)) {
-            ps.setLong(1, id);
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next();
-            }
-        } catch (SQLException ex) {
-            throw new IllegalStateException("No se pudo consultar la empresa de la sucursal", ex);
+    private static void exigir(CallableStatement llamada, int codigo, int descripcion) throws SQLException {
+        int resultado = llamada.getInt(codigo);
+        if (llamada.wasNull() || resultado != 0) {
+            throw new IllegalStateException(llamada.getString(descripcion));
         }
     }
 
@@ -186,13 +150,13 @@ public class SucursalOracle implements SucursalRepositorio {
         return rs.wasNull() ? null : valor;
     }
 
-    private static void texto(PreparedStatement ps, int indice, String valor) throws SQLException {
-        if (valor == null || valor.isBlank()) ps.setNull(indice, Types.VARCHAR);
-        else ps.setString(indice, valor.trim());
+    private static void texto(CallableStatement llamada, int indice, String valor) throws SQLException {
+        if (valor == null || valor.isBlank()) llamada.setNull(indice, Types.VARCHAR);
+        else llamada.setString(indice, valor.trim());
     }
 
-    private static void entero(PreparedStatement ps, int indice, Integer valor) throws SQLException {
-        if (valor == null) ps.setNull(indice, Types.NUMERIC);
-        else ps.setInt(indice, valor);
+    private static void entero(CallableStatement llamada, int indice, Integer valor) throws SQLException {
+        if (valor == null) llamada.setNull(indice, Types.NUMERIC);
+        else llamada.setInt(indice, valor);
     }
 }
