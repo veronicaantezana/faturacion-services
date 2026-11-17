@@ -103,6 +103,22 @@ CREATE OR REPLACE PACKAGE FACTURACION.PKG_REGISTRO AS
         pOutDesError              OUT VARCHAR2
     );
 
+    PROCEDURE SPR_LISTAR_PRODUCTOS_SIN (
+        pInIdEmpresa              IN NUMBER,
+        pOutDatos                 OUT SYS_REFCURSOR,
+        pOutCodError              OUT NUMBER,
+        pOutDesError              OUT VARCHAR2
+    );
+
+    PROCEDURE SPR_REGISTRAR_PRODUCTO (
+        pInIdEmpresa              IN NUMBER,
+        pInIdProductoSin          IN NUMBER,
+        pInUsuario                IN VARCHAR2,
+        pOutIdMapeo               OUT NUMBER,
+        pOutCodError              OUT NUMBER,
+        pOutDesError              OUT VARCHAR2
+    );
+
 END PKG_REGISTRO;
 /
 
@@ -608,6 +624,136 @@ CREATE OR REPLACE PACKAGE BODY FACTURACION.PKG_REGISTRO AS
             pOutDesError := SQLERRM;
             OPEN pOutDatos FOR SELECT NULL AS ID_MAPEO_PRODUCTO FROM DUAL WHERE 1 = 0;
     END SPR_LISTAR_PRODUCTOS;
+
+    PROCEDURE SPR_LISTAR_PRODUCTOS_SIN (
+        pInIdEmpresa IN NUMBER,
+        pOutDatos    OUT SYS_REFCURSOR,
+        pOutCodError OUT NUMBER,
+        pOutDesError OUT VARCHAR2
+    ) IS
+        vNumExiste NUMBER;
+    BEGIN
+        pOutCodError := 0;
+        pOutDesError := 'OK';
+
+        IF pInIdEmpresa IS NULL THEN
+            RAISE_APPLICATION_ERROR(-20001, 'La empresa es obligatoria');
+        END IF;
+
+        SELECT COUNT(*)
+          INTO vNumExiste
+          FROM FACTURACION.F_EMPRESA
+         WHERE ID_EMPRESA = pInIdEmpresa
+           AND ROWNUM = 1;
+        IF vNumExiste = 0 THEN
+            RAISE_APPLICATION_ERROR(-20001, 'No existe la empresa ' || pInIdEmpresa);
+        END IF;
+
+        OPEN pOutDatos FOR
+            SELECT p.ID_PRODUCTO_SIN,
+                   p.CODIGO_ACTIVIDAD,
+                   p.CODIGO_PRODUCTO_SIN,
+                   p.DESCRIPCION
+              FROM FACTURACION.F_PRODUCTO_SIN p
+             WHERE p.ID_EMPRESA = pInIdEmpresa
+               AND p.ENABLED = 1
+               AND NOT EXISTS (
+                    SELECT 1
+                      FROM FACTURACION.F_MAPEO_PRODUCTO m
+                     WHERE m.ID_EMPRESA = p.ID_EMPRESA
+                       AND m.ID_PRODUCTO_SIN = p.ID_PRODUCTO_SIN
+               )
+             ORDER BY p.CODIGO_ACTIVIDAD, p.CODIGO_PRODUCTO_SIN, p.ID_PRODUCTO_SIN;
+    EXCEPTION
+        WHEN OTHERS THEN
+            pOutCodError := SQLCODE;
+            pOutDesError := SQLERRM;
+            OPEN pOutDatos FOR SELECT NULL AS ID_PRODUCTO_SIN FROM DUAL WHERE 1 = 0;
+    END SPR_LISTAR_PRODUCTOS_SIN;
+
+    PROCEDURE SPR_REGISTRAR_PRODUCTO (
+        pInIdEmpresa     IN NUMBER,
+        pInIdProductoSin IN NUMBER,
+        pInUsuario       IN VARCHAR2,
+        pOutIdMapeo      OUT NUMBER,
+        pOutCodError     OUT NUMBER,
+        pOutDesError     OUT VARCHAR2
+    ) IS
+        vNumExiste   NUMBER;
+        vNumCodigo   NUMBER;
+        vStrUsuario  VARCHAR2(100);
+        vStrCodigo   VARCHAR2(100);
+    BEGIN
+        pOutIdMapeo := NULL;
+        pOutCodError := 0;
+        pOutDesError := NULL;
+
+        vStrUsuario := fn_texto(pInUsuario);
+        IF pInIdEmpresa IS NULL THEN
+            RAISE_APPLICATION_ERROR(-20001, 'La empresa es obligatoria');
+        END IF;
+        IF pInIdProductoSin IS NULL THEN
+            RAISE_APPLICATION_ERROR(-20001, 'El producto del SIN es obligatorio');
+        END IF;
+        IF vStrUsuario IS NULL THEN
+            RAISE_APPLICATION_ERROR(-20001, 'Falta el usuario que registra el producto');
+        END IF;
+
+        SELECT COUNT(*)
+          INTO vNumExiste
+          FROM FACTURACION.F_EMPRESA
+         WHERE ID_EMPRESA = pInIdEmpresa
+           AND ROWNUM = 1;
+        IF vNumExiste = 0 THEN
+            RAISE_APPLICATION_ERROR(-20001, 'No existe la empresa ' || pInIdEmpresa);
+        END IF;
+
+        BEGIN
+            SELECT TO_CHAR(p.CODIGO_PRODUCTO_SIN) || ','
+              INTO vStrCodigo
+              FROM FACTURACION.F_PRODUCTO_SIN p
+             WHERE p.ID_PRODUCTO_SIN = pInIdProductoSin
+               AND p.ID_EMPRESA = pInIdEmpresa
+               AND p.ENABLED = 1;
+        EXCEPTION
+            WHEN NO_DATA_FOUND THEN
+                RAISE_APPLICATION_ERROR(-20001, 'El producto del SIN no pertenece a la empresa o no esta habilitado');
+        END;
+
+        SELECT COUNT(*)
+          INTO vNumExiste
+          FROM FACTURACION.F_MAPEO_PRODUCTO
+         WHERE ID_EMPRESA = pInIdEmpresa
+           AND ID_PRODUCTO_SIN = pInIdProductoSin
+           AND ROWNUM = 1;
+        IF vNumExiste > 0 THEN
+            RAISE_APPLICATION_ERROR(-20001, 'Ese producto del SIN ya esta mapeado para la empresa');
+        END IF;
+
+        SELECT COUNT(*)
+          INTO vNumCodigo
+          FROM FACTURACION.F_MAPEO_PRODUCTO
+         WHERE ID_EMPRESA = pInIdEmpresa
+           AND CODIGO_PRODUCTO = vStrCodigo
+           AND ROWNUM = 1;
+        IF vNumCodigo > 0 THEN
+            RAISE_APPLICATION_ERROR(-20001, 'La empresa ya tiene el codigo ' || vStrCodigo);
+        END IF;
+
+        INSERT INTO FACTURACION.F_MAPEO_PRODUCTO (
+            ID_MAPEO_PRODUCTO, ID_PRODUCTO_SIN, ID_EMPRESA, CODIGO_NANDINA,
+            LAST_USER, LAST_STAMP, CODIGO_PRODUCTO
+        ) VALUES (
+            FACTURACION.S_F_MAPEO_PRODUCTO.NEXTVAL, pInIdProductoSin, pInIdEmpresa, NULL,
+            vStrUsuario, SYSTIMESTAMP, vStrCodigo
+        ) RETURNING ID_MAPEO_PRODUCTO INTO pOutIdMapeo;
+
+        pOutDesError := 'OK';
+    EXCEPTION
+        WHEN OTHERS THEN
+            pOutCodError := SQLCODE;
+            pOutDesError := SQLERRM;
+    END SPR_REGISTRAR_PRODUCTO;
 
 END PKG_REGISTRO;
 /

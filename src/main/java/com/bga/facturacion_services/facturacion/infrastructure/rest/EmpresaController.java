@@ -9,6 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -28,6 +29,21 @@ public class EmpresaController {
     @GetMapping("/{idEmpresa}/productos")
     public List<ProductoEmpresaResponse> productos(@PathVariable long idEmpresa) {
         return productos.listarPorEmpresa(idEmpresa);
+    }
+
+    @GetMapping("/{idEmpresa}/productos-sin")
+    public List<ProductoSinResponse> productosSin(@PathVariable long idEmpresa) {
+        return productos.listarSinPorEmpresa(idEmpresa);
+    }
+
+    @PostMapping("/{idEmpresa}/productos")
+    public ResponseEntity<ProductoEmpresaResponse> registrarProducto(
+            @PathVariable long idEmpresa,
+            @RequestParam long idProductoSin,
+            @RequestHeader(value = "X-Usuario", required = false) String usuario) {
+        ProductoEmpresaResponse creado = productos.registrar(idEmpresa, idProductoSin, usuario);
+        return ResponseEntity.created(URI.create(
+                "/api/v1/facturacion/empresas/" + idEmpresa + "/productos/" + creado.id())).body(creado);
     }
 
     @GetMapping
