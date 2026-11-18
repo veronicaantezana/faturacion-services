@@ -18,7 +18,7 @@ public record FacturaEmitidaResponse(
         BigDecimal montoTotalMoneda, BigDecimal montoGiftCard, BigDecimal descuentoAdicional,
         Integer codigoExcepcion, String cafc, String leyenda, String usuario, int codigoDocumentoSector,
         String modoEmision, String estado, boolean reversionAnulacionUtilizada, List<ItemEmitido> items,
-        Long idComplemento, Long nroSolicitud) {
+        Long idComplemento, Long nroSolicitud, String mensajeEnvio) {
 
     public record ItemEmitido(String actividadEconomica, long codigoProductoSin, String codigoProducto,
                               String descripcion, BigDecimal cantidad, int unidadMedida, String unidadMedidaDescripcion,
@@ -53,7 +53,8 @@ public record FacturaEmitidaResponse(
                         linea.item().precioUnitario(), linea.item().descuento(), linea.subtotal(),
                         linea.item().numeroSerie(), linea.item().numeroImei())).toList(),
                 registro.alta() == null ? null : registro.alta().idComplemento(),
-                registro.alta() == null ? null : registro.alta().nroSolicitud());
+                registro.alta() == null ? null : registro.alta().nroSolicitud(),
+                emision.mensaje());
     }
 
     private static String tipoDocumento(int codigo) {

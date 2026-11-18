@@ -6,6 +6,8 @@ import com.bga.facturacion_services.facturacion.domain.Factura;
 public interface AltaFacturaWeb {
     Resultado registrar(Factura factura);
 
+    default void guardarRespuestaFeel(Resultado alta, ResultadoEmision emision) {}
+
     record Resultado(long idComplemento, long nroSolicitud) {}
 
     class Rechazo extends RuntimeException {

@@ -270,7 +270,7 @@ CREATE OR REPLACE PACKAGE BODY FACTURACION.PKG_REGISTRO AS
             ADMIN_SEQUENCE, ADMIN_SEQ_NOTA, LAST_USER, LAST_STAMP, ENVIAR_CORREO, COMPLETAR_DATOS,
             URL_DESCARGA, DEST_NOTIFICACION, DOC_SECTOR_VALIDATE, GENERAR_PDF, TOKEN_ENABLED,
             CORREO_INDIVIDUAL, PLAN_VIGENTE, PERIODO_PAGO, MAX_FACTURAS, CONCILIACION, NOMBRECOMERCIAL,
-            FUNCIONALIDA, GENERAR_PDF_COD_SISTEMA
+            FUNCIONALIDA
         ) VALUES (
             FACTURACION.S_F_EMPRESA.NEXTVAL, vStrNit, vStrNombre, vStrEstado, pInModalidad,
             vStrCodigoAutorizacion, vStrKeyName, vStrCodigoSistema,
@@ -278,7 +278,7 @@ CREATE OR REPLACE PACKAGE BODY FACTURACION.PKG_REGISTRO AS
             pInEnviarCorreo, pInCompletarDatos, vStrUrlDescarga, vStrDestNotificacion,
             vStrDocSectorValidate, pInGenerarPdf, pInTokenEnabled, pInCorreoIndividual,
             vStrPlanVigente, vStrPeriodoPago, pInMaxFacturas, pInConciliacion,
-            vStrNombreComercial, pInFuncionalida, pInGenerarPdfCodSistema
+            vStrNombreComercial, pInFuncionalida
         ) RETURNING ID_EMPRESA INTO pOutIdEmpresa;
 
         pOutDesError := 'OK';
@@ -301,7 +301,7 @@ CREATE OR REPLACE PACKAGE BODY FACTURACION.PKG_REGISTRO AS
                    ADMIN_SEQUENCE, ADMIN_SEQ_NOTA, LAST_USER, LAST_STAMP, ENVIAR_CORREO, COMPLETAR_DATOS,
                    URL_DESCARGA, DEST_NOTIFICACION, DOC_SECTOR_VALIDATE, GENERAR_PDF, TOKEN_ENABLED,
                    CORREO_INDIVIDUAL, PLAN_VIGENTE, PERIODO_PAGO, MAX_FACTURAS, CONCILIACION, NOMBRECOMERCIAL,
-                   FUNCIONALIDA, GENERAR_PDF_COD_SISTEMA
+                   FUNCIONALIDA, CAST(NULL AS NUMBER) AS GENERAR_PDF_COD_SISTEMA
               FROM FACTURACION.F_EMPRESA
              ORDER BY ID_EMPRESA;
     EXCEPTION
@@ -656,7 +656,6 @@ CREATE OR REPLACE PACKAGE BODY FACTURACION.PKG_REGISTRO AS
                    p.DESCRIPCION
               FROM FACTURACION.F_PRODUCTO_SIN p
              WHERE p.ID_EMPRESA = pInIdEmpresa
-               AND p.ENABLED = 1
                AND NOT EXISTS (
                     SELECT 1
                       FROM FACTURACION.F_MAPEO_PRODUCTO m
@@ -713,11 +712,10 @@ CREATE OR REPLACE PACKAGE BODY FACTURACION.PKG_REGISTRO AS
               INTO vStrCodigo
               FROM FACTURACION.F_PRODUCTO_SIN p
              WHERE p.ID_PRODUCTO_SIN = pInIdProductoSin
-               AND p.ID_EMPRESA = pInIdEmpresa
-               AND p.ENABLED = 1;
+               AND p.ID_EMPRESA = pInIdEmpresa;
         EXCEPTION
             WHEN NO_DATA_FOUND THEN
-                RAISE_APPLICATION_ERROR(-20001, 'El producto del SIN no pertenece a la empresa o no esta habilitado');
+                RAISE_APPLICATION_ERROR(-20001, 'El producto del SIN no pertenece a la empresa');
         END;
 
         SELECT COUNT(*)

@@ -36,11 +36,18 @@ public final class FeelAdapter implements ProveedorFacturacion {
         try {
             var respuesta = cliente.enviar(documento);
             var estado = respuesta.fueraLinea() ? ResultadoEmision.Estado.CONTINGENCIA : ResultadoEmision.Estado.ACEPTADA;
-            return new ResultadoEmision(estado, codigo(), false, respuesta.idDocFiscalFeel(), respuesta.mensaje(),
-                    "application/json", solicitud, respuesta.cuf(), respuesta.cufd());
+            String mensaje = respuesta.mensaje();
+            if (respuesta.cuf().isBlank()) {
+                mensaje = sincrono
+                        ? "FEEL respondió, pero no devolvió el CUF."
+                        : "FEEL recibió la factura en modo asíncrono y no devolvió el CUF en esta respuesta.";
+            }
+            return new ResultadoEmision(estado, codigo(), false, respuesta.idDocFiscalFeel(), mensaje,
+                    "application/json", solicitud, respuesta.cuf(), respuesta.cufd(), respuesta.cuerpo());
         } catch (FeelClienteHttp.FeelRechazoException ex) {
-            return new ResultadoEmision(ResultadoEmision.Estado.RECHAZADA, codigo(), false, null, ex.getMessage(),
-                    "application/json", solicitud, null, null);
+            return new ResultadoEmision(ResultadoEmision.Estado.RECHAZADA, codigo(), false, null,
+                    "No se envió a FEEL: " + ex.getMessage(),
+                    "application/json", solicitud, null, null, ex.cuerpo());
         }
     }
 }

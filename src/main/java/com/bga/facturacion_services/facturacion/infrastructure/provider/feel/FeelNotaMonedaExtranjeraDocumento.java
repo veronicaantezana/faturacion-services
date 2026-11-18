@@ -26,45 +26,48 @@ public final class FeelNotaMonedaExtranjeraDocumento implements DocumentoFeel {
         FeelMetadata meta = factura.feel();
         long nit = FeelConversiones.nit(factura.emisor().nit());
         var venta = factura.venta();
-        String monedaCatalogo = meta.codigoMonedaCatalogo() != null ? meta.codigoMonedaCatalogo() : String.valueOf(venta.codigoMoneda());
-        var cabecera = new LinkedHashMap<String, Object>();
-        cabecera.put("ingresoDiferenciaCambio", meta.ingresoDiferenciaCambio() == null ? BigDecimal.ZERO : meta.ingresoDiferenciaCambio());
-        cabecera.put("codigoTipoOperacion", meta.codigoTipoOperacion() == null ? 2 : meta.codigoTipoOperacion());
-        cabecera.put("tipoCambioOficial", meta.tipoCambioOficial() == null ? venta.tipoCambio() : meta.tipoCambioOficial());
-        cabecera.put("nitEmisor", nit);
-        cabecera.put("razonSocialEmisor", factura.emisor().razonSocial());
-        cabecera.put("municipio", factura.emisor().municipio());
-        cabecera.put("montoTotalSujetoIva", factura.totalSujetoIva());
-        cabecera.put("numeroFactura", String.valueOf(meta.numeroFacturaEnCabecera(factura.numero())));
-        cabecera.put("cuf", "");
-        cabecera.put("codigoSucursal", String.valueOf(factura.emisor().sucursal()));
-        cabecera.put("direccion", "");
-        cabecera.put("codigoPuntoVenta", String.valueOf(factura.emisor().puntoVenta()));
-        cabecera.put("fechaEmision", FECHA.format(factura.fecha()));
-        cabecera.put("leyenda", "");
-        cabecera.put("nombreRazonSocial", factura.cliente().razonSocial());
-        cabecera.put("codigoTipoDocumentoIdentidad", FeelConversiones.tipoDocumentoIdentidad(factura.cliente().tipoDocumento()));
-        cabecera.put("numeroDocumento", factura.cliente().documento());
-        cabecera.put("complemento", factura.cliente().complemento() == null ? "" : factura.cliente().complemento());
-        cabecera.put("codigoCliente", factura.cliente().documento());
-        cabecera.put("codigoMetodoPago", String.valueOf(factura.metodoPago()));
-        cabecera.put("numeroTarjeta", String.valueOf(FeelConversiones.tarjeta(venta.numeroTarjeta())));
-        cabecera.put("montoTotal", factura.total());
-        cabecera.put("codigoMoneda", monedaCatalogo);
-        cabecera.put("tipoCambio", venta.tipoCambio().toPlainString());
-        cabecera.put("montoTotalMoneda", venta.montoTotalMoneda());
-        cabecera.put("usuario", factura.usuario());
-        cabecera.put("codigoDocumentoSector", sector());
-        cabecera.put("codigoExcepcion", venta.codigoExcepcion() == null ? 0 : venta.codigoExcepcion());
-        cabecera.put("cafc", FeelConversiones.vacio(venta.cafc()));
-        return Map.of("cabecera", cabecera, "detalle", detalle(factura));
+        String monedaCatalogo = codigoMoneda(meta.codigoMonedaCatalogo(), venta.codigoMoneda());
+        var cabecera = new CabeceraFeel()
+                .poner("nitEmisor", nit)
+                .poner("razonSocialEmisor", factura.emisor().razonSocial())
+                .poner("municipio", FeelConversiones.vacio(factura.emisor().municipio()))
+                .poner("telefono", FeelConversiones.vacio(factura.emisor().telefono()))
+                .poner("numeroFactura", String.valueOf(meta.numeroFacturaEnCabecera(factura.numero())))
+                .poner("cuf", "")
+                .poner("cufd", "")
+                .poner("codigoSucursal", String.valueOf(factura.emisor().sucursal()))
+                .poner("direccion", FeelConversiones.vacio(factura.emisor().direccion()))
+                .poner("codigoPuntoVenta", String.valueOf(factura.emisor().puntoVenta()))
+                .poner("fechaEmision", FECHA.format(factura.fecha()))
+                .poner("nombreRazonSocial", factura.cliente().razonSocial())
+                .poner("codigoTipoDocumentoIdentidad", FeelConversiones.tipoDocumentoIdentidad(factura.cliente().tipoDocumento()))
+                .poner("numeroDocumento", factura.cliente().documento())
+                .poner("complemento", factura.cliente().complemento() == null ? "" : factura.cliente().complemento())
+                .poner("codigoCliente", factura.cliente().documento())
+                .poner("codigoTipoOperacion", meta.codigoTipoOperacion() == null ? 2 : meta.codigoTipoOperacion())
+                .poner("codigoMetodoPago", String.valueOf(factura.metodoPago()))
+                .poner("numeroTarjeta", String.valueOf(FeelConversiones.tarjeta(venta.numeroTarjeta())))
+                .poner("montoTotal", factura.total())
+                .poner("montoTotalSujetoIva", factura.totalSujetoIva())
+                .poner("ingresoDiferenciaCambio", meta.ingresoDiferenciaCambio() == null ? BigDecimal.ZERO : meta.ingresoDiferenciaCambio())
+                .poner("codigoMoneda", monedaCatalogo)
+                .poner("tipoCambio", venta.tipoCambio().toPlainString())
+                .poner("montoTotalMoneda", venta.montoTotalMoneda())
+                .poner("descuentoAdicional", FeelConversiones.ceroNulo(factura.descuentoAdicional()))
+                .poner("codigoExcepcion", venta.codigoExcepcion() == null ? 0 : venta.codigoExcepcion())
+                .poner("cafc", FeelConversiones.vacio(venta.cafc()))
+                .poner("leyenda", "")
+                .poner("usuario", factura.usuario())
+                .poner("tipoCambioOficial", meta.tipoCambioOficial() == null ? venta.tipoCambio() : meta.tipoCambioOficial())
+                .poner("codigoDocumentoSector", sector());
+        return Map.of("cabecera", cabecera.campos(), "detalle", detalle(factura));
     }
 
     private List<Map<String, Object>> detalle(Factura factura) {
         var lineas = new ArrayList<Map<String, Object>>();
         for (var linea : factura.detalle()) {
             var item = new LinkedHashMap<String, Object>();
-            item.put("actividadEconomica", null);
+            item.put("actividadEconomica", FeelConversiones.vacio(linea.item().actividad()));
             long sin = Long.parseLong(linea.item().codigoSin());
             item.put("codigoProductoSin", sin);
             item.put("codigoProducto", parseCodigoProducto(linea.item().codigo(), sin));
@@ -77,6 +80,12 @@ public final class FeelNotaMonedaExtranjeraDocumento implements DocumentoFeel {
             lineas.add(item);
         }
         return lineas;
+    }
+
+    private static String codigoMoneda(String catalogo, int codigoSin) {
+        if (catalogo == null || catalogo.isBlank() || catalogo.equals(String.valueOf(codigoSin)))
+            return FeelConversiones.tipoMoneda(codigoSin);
+        return catalogo.trim();
     }
 
     private Object parseCodigoProducto(String codigo, long sin) {

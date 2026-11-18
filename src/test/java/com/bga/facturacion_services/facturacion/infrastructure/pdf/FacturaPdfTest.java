@@ -24,7 +24,7 @@ class FacturaPdfTest {
                         1, "cajero", List.of(new Factura.Item("PT-001-02S", "99100", "110000", "Cerveza Pale Ale",
                         58, new BigDecimal("6.00"), new BigDecimal("9.62"), BigDecimal.ZERO)), null));
         var emision = new ResultadoEmision(ResultadoEmision.Estado.ACEPTADA, "feel", false, "101", "ok",
-                "application/json", "{}", "13FEDFAC1094D2BE", "CUFD");
+                "application/json", "{}", "13FEDFAC1094D2BE", "CUFD", null);
 
         byte[] pdf = FacturaPdf.generar(new RegistroFactura(factura, emision));
 

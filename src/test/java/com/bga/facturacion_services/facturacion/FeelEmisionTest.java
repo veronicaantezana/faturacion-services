@@ -56,6 +56,10 @@ class FeelEmisionTest {
                 .andExpect(jsonPath("$.montoTotal").value(93.0))
                 .andExpect(jsonPath("$.codigoSucursal").value(0));
         var enviado = new ObjectMapper().readTree(ULTIMO.get());
+        assertThat(enviado.get("facturaCompraVenta").get("cabecera").get("nitEmisor").asLong()).isEqualTo(1028279021L);
+        assertThat(enviado.get("facturaCompraVenta").get("cabecera").get("razonSocialEmisor").asText())
+                .isEqualTo("COOPERATIVA EDUCACIONAL SANTA CRUZ S.R.L.");
+        assertThat(enviado.get("facturaCompraVenta").get("cabecera").get("direccion").asText()).isEqualTo("Calle 1");
         assertThat(enviado.get("facturaCompraVenta").get("cabecera").get("codigoDocumentoSector").asInt()).isEqualTo(1);
         assertThat(enviado.get("facturaEntidadFinanciera").isNull()).isTrue();
         assertThat(enviado.get("facturaAlquiler").isNull()).isTrue();
@@ -86,7 +90,9 @@ class FeelEmisionTest {
 
     private String cuerpo(String cliente) {
         return """
-                {"codigoSucursal":0,"codigoPuntoVenta":0,"codigoTipoDocumentoIdentidad":1,
+                {"nitEmisor":"1028279021","razonSocialEmisor":"COOPERATIVA EDUCACIONAL SANTA CRUZ S.R.L.",
+                "municipio":"Santa Cruz","direccion":"Calle 1","telefono":"70000000",
+                "codigoSucursal":0,"codigoPuntoVenta":0,"codigoTipoDocumentoIdentidad":1,
                 "numeroDocumento":"1234567","nombreRazonSocial":"%s","correoCliente":"a@b.com",
                 "codigoMetodoPago":1,"codigoMoneda":1,"tipoCambio":1,"descuentoAdicional":2,
                 "usuario":"admin","codigoDocumentoSector":1,"items":[{"codigoProducto":"PROD-001",

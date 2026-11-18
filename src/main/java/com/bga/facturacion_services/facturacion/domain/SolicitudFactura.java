@@ -8,11 +8,14 @@ public record SolicitudFactura(String tipo, Factura.Cliente cliente, int metodoP
                                Integer sucursal, Integer puntoVenta, String correo, String numeroTarjeta,
                                Integer codigoMoneda, BigDecimal tipoCambio, BigDecimal montoGiftCard,
                                Integer codigoExcepcion, String cafc, Integer codigoDocumentoSector,
-                               FeelMetadata feel, BigDecimal totalSujetoIvaForzado) {
+                               FeelMetadata feel, BigDecimal totalSujetoIvaForzado,
+                               String nitEmisor, String razonSocialEmisor, String municipio,
+                               String direccion, String telefono) {
     public SolicitudFactura(String tipo, Factura.Cliente cliente, int metodoPago, String usuario,
                             List<Factura.Item> detalle, BigDecimal descuentoAdicional) {
         this(tipo, cliente, metodoPago, usuario, detalle, descuentoAdicional,
-                null, null, null, null, null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null);
     }
 }
 

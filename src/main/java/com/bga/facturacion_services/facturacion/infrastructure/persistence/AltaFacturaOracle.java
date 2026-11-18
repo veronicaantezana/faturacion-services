@@ -1,6 +1,7 @@
 package com.bga.facturacion_services.facturacion.infrastructure.persistence;
 
 import com.bga.facturacion_services.facturacion.application.AltaFacturaWeb;
+import com.bga.facturacion_services.facturacion.application.ResultadoEmision;
 import com.bga.facturacion_services.facturacion.domain.Factura;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
@@ -16,6 +17,7 @@ import javax.sql.DataSource;
 public final class AltaFacturaOracle implements AltaFacturaWeb {
     private static final String LLAMADA = "{ call GANADERO.SPR_REGISTRAR_FACTURA_WEB("
             + "?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) }";
+    private static final String ACTUALIZAR = "{ call GANADERO.SPR_ACTUALIZAR_RESPUESTA_FEEL(?,?,?,?,?,?,?) }";
     private final DataSource oracle;
     private final ObjectMapper json;
     private final String codigoSistemaOrigen;
@@ -57,6 +59,39 @@ public final class AltaFacturaOracle implements AltaFacturaWeb {
             throw ex;
         } catch (Exception ex) {
             throw new IllegalStateException("No se pudo registrar la factura en Oracle", ex);
+        }
+    }
+
+    public void guardarRespuestaFeel(Resultado alta, ResultadoEmision emision) {
+        boolean enviado = emision.estado() == ResultadoEmision.Estado.ACEPTADA
+                || emision.estado() == ResultadoEmision.Estado.CONTINGENCIA;
+        try (Connection conexion = oracle.getConnection()) {
+            conexion.setAutoCommit(false);
+            try (CallableStatement llamada = conexion.prepareCall(ACTUALIZAR)) {
+                llamada.setLong(1, alta.idComplemento());
+                llamada.setLong(2, alta.nroSolicitud());
+                llamada.setInt(3, enviado ? 1 : 0);
+                texto(llamada, 4, emision.mensaje());
+                if (emision.respuestaJson() == null || emision.respuestaJson().isBlank()) llamada.setNull(5, Types.CLOB);
+                else llamada.setString(5, emision.respuestaJson());
+                llamada.registerOutParameter(6, Types.VARCHAR);
+                llamada.registerOutParameter(7, Types.VARCHAR);
+                llamada.execute();
+                String codigo = llamada.getString(6);
+                String descripcion = llamada.getString(7);
+                if (!"COD000".equals(codigo)) {
+                    conexion.rollback();
+                    throw new IllegalStateException(codigo + (descripcion == null || descripcion.isBlank() ? "" : " " + descripcion));
+                }
+                conexion.commit();
+            } catch (RuntimeException ex) {
+                conexion.rollback();
+                throw ex;
+            }
+        } catch (RuntimeException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new IllegalStateException("No se pudo guardar la respuesta de FEEL en CI_FACTURA_COMPLEMENTO", ex);
         }
     }
 

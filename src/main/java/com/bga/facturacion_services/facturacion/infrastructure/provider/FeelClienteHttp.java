@@ -30,12 +30,14 @@ public final class FeelClienteHttp {
             cuerpo = restClient.post().uri(url).contentType(MediaType.APPLICATION_JSON).body(documento)
                     .retrieve().body(String.class);
         } catch (RestClientResponseException ex) {
-            throw new FeelRechazoException("FEEL respondio " + ex.getStatusCode().value() + ": " + recortar(ex.getResponseBodyAsString()));
+            throw new FeelRechazoException("FEEL respondio " + ex.getStatusCode().value() + ": " + recortar(ex.getResponseBodyAsString()),
+                    ex.getResponseBodyAsString());
         } catch (RestClientException ex) {
             throw ex;
         }
         if (cuerpo == null || cuerpo.isBlank()) throw new FeelRechazoException("FEEL no devolvio contenido");
-        return interpretar(cuerpo);
+        try { return interpretar(cuerpo); }
+        catch (FeelRechazoException ex) { throw new FeelRechazoException(ex.getMessage(), cuerpo); }
     }
 
     @SuppressWarnings("unchecked")
@@ -58,7 +60,7 @@ public final class FeelClienteHttp {
         if (cuf.isBlank()) cuf = cufEnCabecera(raiz);
         return new FeelRespuesta(cuf, texto(proceso.get("cufd")),
                 texto(proceso.get("idDocFiscalFEEL")), esVerdadero(proceso.get("fueraLinea")),
-                texto.isBlank() ? "Factura enviada a FEEL" : texto);
+                texto.isBlank() ? "Factura enviada a FEEL" : texto, cuerpo);
     }
 
     /** FEEL devuelve el CUF en la cabecera del documento, no en proceso. */
@@ -119,9 +121,12 @@ public final class FeelClienteHttp {
         return limpio.length() > 300 ? limpio.substring(0, 300) : limpio;
     }
 
-    public record FeelRespuesta(String cuf, String cufd, String idDocFiscalFeel, boolean fueraLinea, String mensaje) {}
+    public record FeelRespuesta(String cuf, String cufd, String idDocFiscalFeel, boolean fueraLinea, String mensaje, String cuerpo) {}
 
     public static final class FeelRechazoException extends RuntimeException {
-        public FeelRechazoException(String mensaje) { super(mensaje); }
+        private final String cuerpo;
+        public FeelRechazoException(String mensaje) { this(mensaje, null); }
+        public FeelRechazoException(String mensaje, String cuerpo) { super(mensaje); this.cuerpo = cuerpo; }
+        public String cuerpo() { return cuerpo; }
     }
 }

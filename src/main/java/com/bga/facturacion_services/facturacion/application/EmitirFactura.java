@@ -37,14 +37,26 @@ public final class EmitirFactura {
         Factura factura = regla.construir(reserva.id(), reserva.numero(), OffsetDateTime.now(clock), emisorFactura, solicitud);
         AltaFacturaWeb.Resultado alta = altaOracle.registrar(factura);
         RegistroFactura preparada = new RegistroFactura(factura, new ResultadoEmision(ResultadoEmision.Estado.PREPARADA,
-                proveedor.codigo(), proveedor.simulado(), null, "Preparada para envio", null, null, null, null));
+                proveedor.codigo(), proveedor.simulado(), null, "Preparada para envio", null, null, null, null, null));
         store.guardar(factura.id(), preparada);
         ResultadoEmision resultado;
         try { resultado = proveedor.emitir(factura); }
         catch (IllegalArgumentException ex) { throw ex; }
         catch (RuntimeException ex) {
+            String motivo = ex.getMessage() == null || ex.getMessage().isBlank()
+                    ? "No hubo respuesta de FEEL" : ex.getMessage();
             resultado = new ResultadoEmision(ResultadoEmision.Estado.PENDIENTE_CONFIRMACION,
-                    proveedor.codigo(), proveedor.simulado(), null, "Resultado no confirmado; no reenviar automaticamente", null, null, null, null);
+                    proveedor.codigo(), proveedor.simulado(), null, "No se envió a FEEL: " + motivo,
+                    null, null, null, null, null);
+        }
+        if (alta != null) {
+            try { altaOracle.guardarRespuestaFeel(alta, resultado); }
+            catch (RuntimeException ex) {
+                String aviso = ex.getMessage() == null ? "No se pudo guardar la respuesta en Oracle" : ex.getMessage();
+                resultado = new ResultadoEmision(resultado.estado(), resultado.proveedor(), resultado.simulado(),
+                        resultado.referencia(), resultado.mensaje() + " " + aviso, resultado.formato(),
+                        resultado.solicitud(), resultado.cuf(), resultado.cufd(), resultado.respuestaJson());
+            }
         }
         RegistroFactura registro = new RegistroFactura(factura, resultado, alta);
         store.guardar(factura.id(), registro);
@@ -54,11 +66,17 @@ public final class EmitirFactura {
         return store.buscar(id).orElseThrow(() -> new FacturaNoEncontrada(id));
     }
     private Factura.Emisor emisorDe(SolicitudFactura solicitud) {
-        int sucursal = solicitud.sucursal() != null ? solicitud.sucursal() : emisor.sucursal();
-        int punto = solicitud.puntoVenta() != null ? solicitud.puntoVenta() : emisor.puntoVenta();
-        if (sucursal < 0 || punto < 0) throw new IllegalArgumentException("Sucursal y punto de venta invalidos");
-        return new Factura.Emisor(emisor.nit(), emisor.razonSocial(), emisor.municipio(), emisor.direccion(),
-                sucursal, punto, emisor.telefono());
+        if (solicitud.nitEmisor() == null || solicitud.nitEmisor().isBlank()
+                || solicitud.razonSocialEmisor() == null || solicitud.razonSocialEmisor().isBlank())
+            throw new IllegalArgumentException("Falta el NIT y la razon social de la empresa");
+        if (solicitud.sucursal() == null || solicitud.puntoVenta() == null || solicitud.sucursal() < 0 || solicitud.puntoVenta() < 0)
+            throw new IllegalArgumentException("Sucursal y punto de venta invalidos");
+        if (solicitud.municipio() == null || solicitud.municipio().isBlank())
+            throw new IllegalArgumentException("Falta el municipio de la sucursal");
+        String telefono = solicitud.telefono() == null || solicitud.telefono().isBlank() ? null : solicitud.telefono().trim();
+        return new Factura.Emisor(solicitud.nitEmisor().trim(), solicitud.razonSocialEmisor().trim(),
+                solicitud.municipio().trim(), solicitud.direccion(), solicitud.sucursal(), solicitud.puntoVenta(),
+                telefono);
     }
     public static final class FacturaNoEncontrada extends RuntimeException {
         public FacturaNoEncontrada(UUID id) { super("Factura no encontrada: " + id); }
