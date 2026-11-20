@@ -35,6 +35,7 @@ public record EmitirCompraVentaRequest(
         Integer codigoTipoOperacion,
         @DecimalMin(value = "0", inclusive = false) BigDecimal tipoCambioOficial,
         @Size(max = 10) String codigoMonedaCatalogo,
+        @NotNull @Min(1) Long idEmpresa,
         @NotBlank @Size(max = 20) String nitEmisor,
         @NotBlank @Size(max = 250) String razonSocialEmisor,
         @Size(max = 100) String municipio,
@@ -73,6 +74,6 @@ public record EmitirCompraVentaRequest(
                 descuentoAdicional, codigoSucursal, codigoPuntoVenta, correoCliente, numeroTarjeta,
                 codigoMoneda, tipoCambio, montoGiftCard, codigoExcepcion, cafc, sector, feel,
                 sector == 9 ? java.math.BigDecimal.ZERO.setScale(2) : null,
-                nitEmisor, razonSocialEmisor, municipio, direccion, telefono);
+                nitEmisor, razonSocialEmisor, municipio, direccion, telefono, idEmpresa);
     }
 }

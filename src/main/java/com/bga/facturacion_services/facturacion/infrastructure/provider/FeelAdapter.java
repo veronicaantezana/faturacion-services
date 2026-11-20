@@ -15,8 +15,8 @@ public final class FeelAdapter implements ProveedorFacturacion {
     private final int codigoTipoFactura;
     private final boolean sincrono;
 
-    public FeelAdapter(ObjectMapper json, FeelClienteHttp cliente, ArmadorSobreFeel armador, String codigoSistemaOrigen,
-                       int codigoTipoFactura, boolean sincrono) {
+    public FeelAdapter(ObjectMapper json, FeelClienteHttp cliente, ArmadorSobreFeel armador,
+                       String codigoSistemaOrigen, int codigoTipoFactura, boolean sincrono) {
         this.json = json;
         this.cliente = cliente;
         this.armador = armador;
@@ -29,7 +29,9 @@ public final class FeelAdapter implements ProveedorFacturacion {
     public boolean simulado() { return false; }
 
     public ResultadoEmision emitir(Factura factura) {
-        var documento = armador.armar(factura, codigoSistemaOrigen, codigoTipoFactura, sincrono);
+        String sistema = factura.emisor().codigoSistema();
+        if (sistema == null || sistema.isBlank()) sistema = codigoSistemaOrigen;
+        var documento = armador.armar(factura, sistema, codigoTipoFactura, sincrono);
         String solicitud;
         try { solicitud = json.writeValueAsString(documento); }
         catch (JsonProcessingException ex) { throw new IllegalStateException("No se pudo armar el documento FEEL", ex); }
@@ -46,7 +48,8 @@ public final class FeelAdapter implements ProveedorFacturacion {
                     "application/json", solicitud, respuesta.cuf(), respuesta.cufd(), respuesta.cuerpo());
         } catch (FeelClienteHttp.FeelRechazoException ex) {
             return new ResultadoEmision(ResultadoEmision.Estado.RECHAZADA, codigo(), false, null,
-                    "No se envió a FEEL: " + ex.getMessage(),
+                    "No se envió a FEEL: " + ex.getMessage()
+                            + " Valor enviado en codigoTipoDocumentoIdentidad: " + factura.cliente().codigoDocumentoFeel(),
                     "application/json", solicitud, null, null, ex.cuerpo());
         }
     }

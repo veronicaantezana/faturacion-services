@@ -18,6 +18,26 @@ public class RegistrarEmpresa {
         return empresas.listar();
     }
 
+    public List<EmpresaResponse> listarPorActividades(String actividades) {
+        return empresas.listarPorActividades(actividadesNormalizadas(actividades));
+    }
+
+    static String actividadesNormalizadas(String actividades) {
+        if (actividades == null || actividades.isBlank()) {
+            throw new IllegalArgumentException("Faltan las actividades");
+        }
+        var codigos = new java.util.ArrayList<String>();
+        for (String parte : actividades.split(",")) {
+            String codigo = parte.trim();
+            if (!codigo.matches("\\d{1,12}")) {
+                throw new IllegalArgumentException("Actividad invalida");
+            }
+            codigos.add(codigo);
+        }
+        if (codigos.isEmpty()) throw new IllegalArgumentException("Faltan las actividades");
+        return String.join(",", codigos);
+    }
+
     public EmpresaResponse registrar(RegistrarEmpresaRequest solicitud, String usuario) {
         if (solicitud.estado() == null || (!solicitud.estado().trim().equals("0") && !solicitud.estado().trim().equals("1"))) {
             throw new IllegalArgumentException("El estado de la empresa debe ser 1 o 0");

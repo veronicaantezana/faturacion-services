@@ -128,13 +128,20 @@ public final class AltaFacturaOracle implements AltaFacturaWeb {
         else llamada.setInt(25, venta.codigoExcepcion());
         texto(llamada, 26, venta.cafc());
         llamada.setString(27, json.writeValueAsString(detalle(factura)));
-        texto(llamada, 28, codigoSistemaOrigen);
+        texto(llamada, 28, origenParaColumna(factura.emisor().codigoSistema()));
         llamada.setInt(29, codigoCanal);
         texto(llamada, 30, factura.usuario());
         llamada.registerOutParameter(31, Types.NUMERIC);
         llamada.registerOutParameter(32, Types.NUMERIC);
         llamada.registerOutParameter(33, Types.VARCHAR);
         llamada.registerOutParameter(34, Types.VARCHAR);
+    }
+
+    /** Mismo origen que el core: F_SIST_ORIGEN.COD_SIST_ORIGEN, que entra en VARCHAR2(20). */
+    private String origenParaColumna(String codigoSistema) {
+        if (codigoSistema != null && !codigoSistema.isBlank() && codigoSistema.trim().length() <= 20)
+            return codigoSistema.trim();
+        return codigoSistemaOrigen;
     }
 
     private java.util.List<Map<String, Object>> detalle(Factura factura) {

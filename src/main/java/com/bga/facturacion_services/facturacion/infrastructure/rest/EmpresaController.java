@@ -1,5 +1,6 @@
 package com.bga.facturacion_services.facturacion.infrastructure.rest;
 
+import com.bga.facturacion_services.facturacion.application.MapeoParametrosFeel;
 import com.bga.facturacion_services.facturacion.application.RegistrarEmpresa;
 import com.bga.facturacion_services.facturacion.infrastructure.persistence.ProductoOracle;
 import jakarta.validation.Valid;
@@ -20,10 +21,17 @@ import org.springframework.web.bind.annotation.RestController;
 public class EmpresaController {
     private final RegistrarEmpresa empresas;
     private final ProductoOracle productos;
+    private final MapeoParametrosFeel mapeo;
 
-    public EmpresaController(RegistrarEmpresa empresas, ProductoOracle productos) {
+    public EmpresaController(RegistrarEmpresa empresas, ProductoOracle productos, MapeoParametrosFeel mapeo) {
         this.empresas = empresas;
         this.productos = productos;
+        this.mapeo = mapeo;
+    }
+
+    @GetMapping("/{idEmpresa}/metodos-pago")
+    public List<MapeoParametrosFeel.MetodoPagoMapeado> metodosPago(@PathVariable long idEmpresa) {
+        return mapeo.listarMetodosPago(idEmpresa);
     }
 
     @GetMapping("/{idEmpresa}/productos")
@@ -47,8 +55,9 @@ public class EmpresaController {
     }
 
     @GetMapping
-    public List<EmpresaResponse> listar() {
-        return empresas.listar();
+    public List<EmpresaResponse> listar(@RequestParam(value = "actividades", required = false) String actividades) {
+        if (actividades == null || actividades.isBlank()) return empresas.listar();
+        return empresas.listarPorActividades(actividades);
     }
 
     @PostMapping

@@ -26,7 +26,7 @@ public final class FeelNotaMonedaExtranjeraDocumento implements DocumentoFeel {
         FeelMetadata meta = factura.feel();
         long nit = FeelConversiones.nit(factura.emisor().nit());
         var venta = factura.venta();
-        String monedaCatalogo = codigoMoneda(meta.codigoMonedaCatalogo(), venta.codigoMoneda());
+        String monedaCatalogo = FeelConversiones.codigoMoneda(factura);
         var cabecera = new CabeceraFeel()
                 .poner("nitEmisor", nit)
                 .poner("razonSocialEmisor", factura.emisor().razonSocial())
@@ -40,12 +40,12 @@ public final class FeelNotaMonedaExtranjeraDocumento implements DocumentoFeel {
                 .poner("codigoPuntoVenta", String.valueOf(factura.emisor().puntoVenta()))
                 .poner("fechaEmision", FECHA.format(factura.fecha()))
                 .poner("nombreRazonSocial", factura.cliente().razonSocial())
-                .poner("codigoTipoDocumentoIdentidad", FeelConversiones.tipoDocumentoIdentidad(factura.cliente().tipoDocumento()))
+                .poner("codigoTipoDocumentoIdentidad", FeelConversiones.tipoDocumentoIdentidad(factura.cliente()))
                 .poner("numeroDocumento", factura.cliente().documento())
                 .poner("complemento", factura.cliente().complemento() == null ? "" : factura.cliente().complemento())
                 .poner("codigoCliente", factura.cliente().documento())
                 .poner("codigoTipoOperacion", meta.codigoTipoOperacion() == null ? 2 : meta.codigoTipoOperacion())
-                .poner("codigoMetodoPago", String.valueOf(factura.metodoPago()))
+                .poner("codigoMetodoPago", FeelConversiones.codigoMetodoPago(factura))
                 .poner("numeroTarjeta", String.valueOf(FeelConversiones.tarjeta(venta.numeroTarjeta())))
                 .poner("montoTotal", factura.total())
                 .poner("montoTotalSujetoIva", factura.totalSujetoIva())
@@ -80,12 +80,6 @@ public final class FeelNotaMonedaExtranjeraDocumento implements DocumentoFeel {
             lineas.add(item);
         }
         return lineas;
-    }
-
-    private static String codigoMoneda(String catalogo, int codigoSin) {
-        if (catalogo == null || catalogo.isBlank() || catalogo.equals(String.valueOf(codigoSin)))
-            return FeelConversiones.tipoMoneda(codigoSin);
-        return catalogo.trim();
     }
 
     private Object parseCodigoProducto(String codigo, long sin) {

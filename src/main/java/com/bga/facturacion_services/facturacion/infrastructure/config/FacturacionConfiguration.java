@@ -63,7 +63,8 @@ public class FacturacionConfiguration {
         };
     }
     @Bean EmitirFactura emitirFactura(List<ReglaFactura> reglas, FacturaStore store,
-            ProveedorFacturacion proveedor, Factura.Emisor emisor, Clock clock, AltaFacturaWeb altaOracle) {
-        return new EmitirFactura(reglas, store, proveedor, emisor, clock, altaOracle);
+            ProveedorFacturacion proveedor, Factura.Emisor emisor, Clock clock, AltaFacturaWeb altaOracle,
+            MapeoParametrosFeel mapeo) {
+        return new EmitirFactura(reglas, store, proveedor, emisor, clock, altaOracle, mapeo);
     }
 }

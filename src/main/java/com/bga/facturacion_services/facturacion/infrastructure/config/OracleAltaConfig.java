@@ -1,6 +1,8 @@
 package com.bga.facturacion_services.facturacion.infrastructure.config;
 
 import com.bga.facturacion_services.facturacion.application.AltaFacturaWeb;
+import com.bga.facturacion_services.facturacion.application.MapeoParametrosFeel;
+import com.bga.facturacion_services.facturacion.infrastructure.persistence.MapeoParametroOracle;
 import com.bga.facturacion_services.facturacion.domain.Factura;
 import com.bga.facturacion_services.facturacion.infrastructure.persistence.AltaFacturaOracle;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -81,6 +83,20 @@ public class OracleAltaConfig {
             @Value("${facturacion.emisor.codigo-tipo-factura:1}") int tipoFactura) {
         String sistema = origen == null || origen.isBlank() ? "FACTWEB" : origen.trim();
         return new AltaFacturaOracle(oracleAltaDataSource, json, sistema, canal, tipoFactura);
+    }
+
+    @Bean
+    @ConditionalOnExpression("'${facturacion.oracle.url:}' != ''")
+    MapeoParametrosFeel mapeoParametrosFeel(@Qualifier("facturacionDataSource") DataSource oracle) {
+        return new MapeoParametroOracle(oracle);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(MapeoParametrosFeel.class)
+    MapeoParametrosFeel mapeoParametrosFeelInactivo() {
+        return (idEmpresa, tipoDocumento, metodoPago, moneda) -> {
+            throw new IllegalStateException("Falta la conexion de FACTURACION para leer el mapeo de parametros");
+        };
     }
 
     @Bean

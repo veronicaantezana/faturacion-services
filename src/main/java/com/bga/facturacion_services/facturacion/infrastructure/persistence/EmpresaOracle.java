@@ -19,6 +19,8 @@ import org.springframework.stereotype.Repository;
 public class EmpresaOracle {
     private static final int CURSOR = -10;
     private static final String LISTAR = "{ call FACTURACION.PKG_REGISTRO.SPR_LISTAR_EMPRESAS(?,?,?) }";
+    private static final String LISTAR_POR_ACTIVIDAD =
+            "{ call FACTURACION.PKG_REGISTRO.SPR_LISTAR_EMPRESAS_POR_ACTIVIDAD(?,?,?,?) }";
     private static final String REGISTRAR = "{ call FACTURACION.PKG_REGISTRO.SPR_REGISTRAR_EMPRESA("
             + "?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) }";
 
@@ -43,6 +45,25 @@ public class EmpresaOracle {
             }
         } catch (SQLException ex) {
             throw new IllegalStateException("No se pudo leer las empresas por FACTURACION.PKG_REGISTRO", ex);
+        }
+    }
+
+    public List<EmpresaResponse> listarPorActividades(String actividades) {
+        try (Connection con = oracle.getConnection();
+             CallableStatement llamada = con.prepareCall(LISTAR_POR_ACTIVIDAD)) {
+            llamada.setString(1, actividades);
+            llamada.registerOutParameter(2, CURSOR);
+            llamada.registerOutParameter(3, Types.NUMERIC);
+            llamada.registerOutParameter(4, Types.VARCHAR);
+            llamada.execute();
+            exigir(llamada, 3, 4);
+            try (ResultSet rs = (ResultSet) llamada.getObject(2)) {
+                var empresas = new ArrayList<EmpresaResponse>();
+                while (rs.next()) empresas.add(mapear(rs));
+                return empresas;
+            }
+        } catch (SQLException ex) {
+            throw new IllegalStateException("No se pudo leer las empresas por actividad", ex);
         }
     }
 

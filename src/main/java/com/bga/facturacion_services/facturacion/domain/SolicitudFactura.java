@@ -10,12 +10,12 @@ public record SolicitudFactura(String tipo, Factura.Cliente cliente, int metodoP
                                Integer codigoExcepcion, String cafc, Integer codigoDocumentoSector,
                                FeelMetadata feel, BigDecimal totalSujetoIvaForzado,
                                String nitEmisor, String razonSocialEmisor, String municipio,
-                               String direccion, String telefono) {
+                               String direccion, String telefono, Long idEmpresa) {
     public SolicitudFactura(String tipo, Factura.Cliente cliente, int metodoPago, String usuario,
                             List<Factura.Item> detalle, BigDecimal descuentoAdicional) {
         this(tipo, cliente, metodoPago, usuario, detalle, descuentoAdicional,
                 null, null, null, null, null, null, null, null, null, null, null, null,
-                null, null, null, null, null);
+                null, null, null, null, null, null);
     }
 }
 

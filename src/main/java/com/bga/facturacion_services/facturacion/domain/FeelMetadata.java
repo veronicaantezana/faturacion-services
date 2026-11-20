@@ -14,10 +14,11 @@ public record FeelMetadata(
         BigDecimal ingresoDiferenciaCambio,
         Integer codigoTipoOperacion,
         BigDecimal tipoCambioOficial,
-        String codigoMonedaCatalogo) {
+        String codigoMonedaCatalogo,
+        String codigoMetodoPagoErp) {
 
   public static FeelMetadata compraVenta() {
-    return new FeelMetadata(1, null, false, "0", false, null, null, null, null, null, null);
+    return new FeelMetadata(1, null, false, "0", false, null, null, null, null, null, null, null);
   }
 
   public static FeelMetadata notaMonedaExtranjera(
@@ -40,7 +41,14 @@ public record FeelMetadata(
             ingresoDiferenciaCambio,
             codigoTipoOperacion,
             tipoCambioOficial,
-            codigoMonedaCatalogo);
+            codigoMonedaCatalogo,
+            null);
+  }
+
+  public FeelMetadata conCodigosErp(String moneda, String metodoPago) {
+    return new FeelMetadata(codigoTipoFactura, idDocFiscalErp, esLote, idLoteErp, ultFacturaLote, eventoId,
+            numeroFacturaCabecera, ingresoDiferenciaCambio, codigoTipoOperacion, tipoCambioOficial,
+            moneda, metodoPago);
   }
 
   public int codigoTipoFactura(int porDefecto) {

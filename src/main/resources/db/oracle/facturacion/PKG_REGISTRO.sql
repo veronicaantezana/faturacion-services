@@ -43,6 +43,33 @@ CREATE OR REPLACE PACKAGE FACTURACION.PKG_REGISTRO AS
         pOutDesError              OUT VARCHAR2
     );
 
+    PROCEDURE SPR_LISTAR_EMPRESAS_POR_ACTIVIDAD (
+        pInActividades            IN VARCHAR2,
+        pOutDatos                 OUT SYS_REFCURSOR,
+        pOutCodError              OUT NUMBER,
+        pOutDesError              OUT VARCHAR2
+    );
+
+    PROCEDURE SPR_OBTENER_CODIGOS_EMISION (
+        pInIdEmpresa              IN NUMBER,
+        pInTipoDocumento          IN VARCHAR2,
+        pInMetodoPago             IN VARCHAR2,
+        pInMoneda                 IN VARCHAR2,
+        pOutTipoDocumento         OUT VARCHAR2,
+        pOutMetodoPago            OUT VARCHAR2,
+        pOutMoneda                OUT VARCHAR2,
+        pOutCodigoSistema         OUT VARCHAR2,
+        pOutCodError              OUT NUMBER,
+        pOutDesError              OUT VARCHAR2
+    );
+
+    PROCEDURE SPR_LISTAR_METODOS_PAGO (
+        pInIdEmpresa              IN NUMBER,
+        pOutDatos                 OUT SYS_REFCURSOR,
+        pOutCodError              OUT NUMBER,
+        pOutDesError              OUT VARCHAR2
+    );
+
     PROCEDURE SPR_REGISTRAR_SUCURSAL (
         pInIdEmpresa              IN NUMBER,
         pInCodigo                 IN VARCHAR2,
@@ -310,6 +337,159 @@ CREATE OR REPLACE PACKAGE BODY FACTURACION.PKG_REGISTRO AS
             pOutDesError := SQLERRM;
             OPEN pOutDatos FOR SELECT NULL AS ID_EMPRESA FROM DUAL WHERE 1 = 0;
     END SPR_LISTAR_EMPRESAS;
+
+    PROCEDURE SPR_LISTAR_EMPRESAS_POR_ACTIVIDAD (
+        pInActividades IN VARCHAR2,
+        pOutDatos      OUT SYS_REFCURSOR,
+        pOutCodError   OUT NUMBER,
+        pOutDesError   OUT VARCHAR2
+    ) IS
+        vStrActividades VARCHAR2(500);
+    BEGIN
+        pOutCodError := 0;
+        pOutDesError := 'OK';
+        vStrActividades := REPLACE(TRIM(pInActividades), ' ', '');
+        IF vStrActividades IS NULL THEN
+            RAISE_APPLICATION_ERROR(-20001, 'Faltan las actividades');
+        END IF;
+
+        OPEN pOutDatos FOR
+            SELECT e.ID_EMPRESA, e.NIT, e.NOMBRE, e.ESTADO, e.MODALIDAD, e.CODIGO_AUTORIZACION, e.KEY_NAME,
+                   e.CODIGO_SISTEMA, e.ADMIN_SEQUENCE, e.ADMIN_SEQ_NOTA, e.LAST_USER, e.LAST_STAMP,
+                   e.ENVIAR_CORREO, e.COMPLETAR_DATOS, e.URL_DESCARGA, e.DEST_NOTIFICACION, e.DOC_SECTOR_VALIDATE,
+                   e.GENERAR_PDF, e.TOKEN_ENABLED, e.CORREO_INDIVIDUAL, e.PLAN_VIGENTE, e.PERIODO_PAGO,
+                   e.MAX_FACTURAS, e.CONCILIACION, e.NOMBRECOMERCIAL, e.FUNCIONALIDA,
+                   CAST(NULL AS NUMBER) AS GENERAR_PDF_COD_SISTEMA
+              FROM FACTURACION.F_EMPRESA e
+             WHERE EXISTS (
+                       SELECT 1
+                         FROM FACTURACION.F_ACT_ECONOMICA a
+                        WHERE a.ID_EMPRESA = e.ID_EMPRESA
+                          AND a.ENABLED = 1
+                          AND INSTR(',' || vStrActividades || ',', ',' || TRIM(TO_CHAR(a.CODIGO)) || ',') > 0
+                   )
+             ORDER BY e.ID_EMPRESA;
+    EXCEPTION
+        WHEN OTHERS THEN
+            pOutCodError := SQLCODE;
+            pOutDesError := SQLERRM;
+            OPEN pOutDatos FOR SELECT NULL AS ID_EMPRESA FROM DUAL WHERE 1 = 0;
+    END SPR_LISTAR_EMPRESAS_POR_ACTIVIDAD;
+
+    FUNCTION fun_codigo_erp (
+        pInIdEmpresa IN NUMBER,
+        pInParamTbz  IN VARCHAR2,
+        pInParamName IN VARCHAR2
+    ) RETURN VARCHAR2
+    IS
+        vStrCodigo VARCHAR2(500);
+        vIntPos    NUMBER;
+    BEGIN
+        SELECT CODIGO_ERP
+          INTO vStrCodigo
+          FROM FACTURACION.F_MAPEO_PARAM
+         WHERE ID_EMPRESA = pInIdEmpresa
+           AND PARAM_TBZ = pInParamTbz
+           AND PARAM_NAME = TRIM(pInParamName);
+
+        vStrCodigo := RTRIM(TRIM(vStrCodigo), ',');
+        vIntPos := INSTR(vStrCodigo, ',');
+        IF vIntPos > 0 THEN
+            vStrCodigo := SUBSTR(vStrCodigo, 1, vIntPos - 1);
+        END IF;
+        vStrCodigo := TRIM(vStrCodigo);
+        IF vStrCodigo IS NULL THEN
+            RAISE_APPLICATION_ERROR(-20001,
+                'La empresa no tiene codigo ERP para ' || pInParamTbz || ' ' || TRIM(pInParamName));
+        END IF;
+        RETURN vStrCodigo;
+    EXCEPTION
+        WHEN NO_DATA_FOUND THEN
+            RAISE_APPLICATION_ERROR(-20001,
+                'La empresa no tiene mapeado ' || pInParamTbz || ' ' || TRIM(pInParamName));
+        WHEN TOO_MANY_ROWS THEN
+            RAISE_APPLICATION_ERROR(-20001,
+                'La empresa tiene mas de un mapeo para ' || pInParamTbz || ' ' || TRIM(pInParamName));
+    END fun_codigo_erp;
+
+    PROCEDURE SPR_OBTENER_CODIGOS_EMISION (
+        pInIdEmpresa      IN NUMBER,
+        pInTipoDocumento  IN VARCHAR2,
+        pInMetodoPago     IN VARCHAR2,
+        pInMoneda         IN VARCHAR2,
+        pOutTipoDocumento OUT VARCHAR2,
+        pOutMetodoPago    OUT VARCHAR2,
+        pOutMoneda        OUT VARCHAR2,
+        pOutCodigoSistema OUT VARCHAR2,
+        pOutCodError      OUT NUMBER,
+        pOutDesError      OUT VARCHAR2
+    ) IS
+    BEGIN
+        pOutCodError := 0;
+        pOutDesError := 'OK';
+        IF pInIdEmpresa IS NULL THEN
+            RAISE_APPLICATION_ERROR(-20001, 'Falta la empresa');
+        END IF;
+
+        BEGIN
+            SELECT TRIM(COD_SIST_ORIGEN)
+              INTO pOutCodigoSistema
+              FROM FACTURACION.F_SIST_ORIGEN
+             WHERE ID_EMPRESA = pInIdEmpresa
+               AND ENABLED = 1;
+        EXCEPTION
+            WHEN NO_DATA_FOUND THEN
+                RAISE_APPLICATION_ERROR(-20001, 'La empresa no tiene codigo de sistema origen habilitado');
+            WHEN TOO_MANY_ROWS THEN
+                RAISE_APPLICATION_ERROR(-20001, 'La empresa tiene mas de un codigo de sistema origen habilitado');
+        END;
+
+        IF pOutCodigoSistema IS NULL THEN
+            RAISE_APPLICATION_ERROR(-20001, 'La empresa no tiene codigo de sistema origen habilitado');
+        END IF;
+
+        pOutTipoDocumento := fun_codigo_erp(pInIdEmpresa, 'TIPO_DOCUMENTO_IDENTIDAD', pInTipoDocumento);
+        pOutMetodoPago := fun_codigo_erp(pInIdEmpresa, 'METODO_PAGO', pInMetodoPago);
+        pOutMoneda := fun_codigo_erp(pInIdEmpresa, 'TIPO_MONEDA', pInMoneda);
+    EXCEPTION
+        WHEN NO_DATA_FOUND THEN
+            pOutCodError := -20001;
+            pOutDesError := 'No existe la empresa ' || pInIdEmpresa;
+        WHEN OTHERS THEN
+            pOutCodError := SQLCODE;
+            pOutDesError := SQLERRM;
+    END SPR_OBTENER_CODIGOS_EMISION;
+
+    PROCEDURE SPR_LISTAR_METODOS_PAGO (
+        pInIdEmpresa IN NUMBER,
+        pOutDatos    OUT SYS_REFCURSOR,
+        pOutCodError OUT NUMBER,
+        pOutDesError OUT VARCHAR2
+    ) IS
+    BEGIN
+        pOutCodError := 0;
+        pOutDesError := 'OK';
+        IF pInIdEmpresa IS NULL THEN
+            RAISE_APPLICATION_ERROR(-20001, 'Falta la empresa');
+        END IF;
+
+        OPEN pOutDatos FOR
+            SELECT TRIM(m.PARAM_NAME) AS CODIGO,
+                   NVL(p.DESCRIPTION, TRIM(m.PARAM_NAME)) AS DESCRIPCION
+              FROM FACTURACION.F_MAPEO_PARAM m
+              LEFT JOIN FACTURACION.F_PARAM p
+                ON p.PARAM_TBZ = 'METODO_PAGO'
+               AND TRIM(TO_CHAR(p.PARAM_VALUE)) = TRIM(m.PARAM_NAME)
+             WHERE m.ID_EMPRESA = pInIdEmpresa
+               AND m.PARAM_TBZ = 'METODO_PAGO'
+               AND TRIM(m.CODIGO_ERP) IS NOT NULL
+             ORDER BY LPAD(TRIM(m.PARAM_NAME), 10, '0');
+    EXCEPTION
+        WHEN OTHERS THEN
+            pOutCodError := SQLCODE;
+            pOutDesError := SQLERRM;
+            OPEN pOutDatos FOR SELECT NULL AS CODIGO FROM DUAL WHERE 1 = 0;
+    END SPR_LISTAR_METODOS_PAGO;
 
     PROCEDURE SPR_REGISTRAR_SUCURSAL (
         pInIdEmpresa         IN NUMBER,

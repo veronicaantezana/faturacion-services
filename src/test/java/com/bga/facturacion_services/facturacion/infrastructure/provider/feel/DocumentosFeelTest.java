@@ -37,7 +37,7 @@ class DocumentosFeelTest {
                 null, 0, 0, null, null, 2, new BigDecimal("12.80618"), null, 1, null, 9,
                 FeelMetadata.notaMonedaExtranjera("19120709", true, "523842",
                         new BigDecimal("0.4"), 2, new BigDecimal("13.20225"), "1112"),
-                BigDecimal.ZERO.setScale(2), "1028421024", "BANCO GANADERO S.A.", "SANTA CRUZ", "Dir", null);
+                BigDecimal.ZERO.setScale(2), "1028421024", "BANCO GANADERO S.A.", "SANTA CRUZ", "Dir", null, null);
         var factura = new NotaMonedaExtranjera().construir(UUID.randomUUID(), 99,
                 OffsetDateTime.parse("2026-10-22T10:10:10.153-04:00"),
                 new Factura.Emisor("1028421024", "BANCO GANADERO S.A.", "SANTA CRUZ", "Dir", 0, 0), solicitud);
@@ -63,7 +63,7 @@ class DocumentosFeelTest {
                 1, "admin", List.of(new Factura.Item("P1", "99100", "620000", "Producto", 58,
                 BigDecimal.ONE, BigDecimal.TEN, null)), null,
                 null, null, null, null, null, null, null, null, null, 1,
-                FeelMetadata.compraVenta(), null, "123", "EMPRESA", "La Paz", "Dir", null);
+                FeelMetadata.compraVenta(), null, "123", "EMPRESA", "La Paz", "Dir", null, null);
         return new com.bga.facturacion_services.facturacion.domain.CompraVenta().construir(
                 UUID.randomUUID(), 1, OffsetDateTime.parse("2026-11-05T12:00:00-04:00"),
                 new Factura.Emisor("123", "EMPRESA", "La Paz", "Dir", 0, 0), solicitud);

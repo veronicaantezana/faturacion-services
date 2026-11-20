@@ -16,12 +16,14 @@ public final class EmitirFactura {
     private final Factura.Emisor emisor;
     private final Clock clock;
     private final AltaFacturaWeb altaOracle;
+    private final MapeoParametrosFeel mapeo;
 
     public EmitirFactura(List<ReglaFactura> reglas, FacturaStore store, ProveedorFacturacion proveedor,
-                         Factura.Emisor emisor, Clock clock, AltaFacturaWeb altaOracle) {
+                         Factura.Emisor emisor, Clock clock, AltaFacturaWeb altaOracle, MapeoParametrosFeel mapeo) {
         this.reglas = reglas.stream().collect(Collectors.toUnmodifiableMap(ReglaFactura::tipo, Function.identity()));
         this.store = store; this.proveedor = proveedor; this.emisor = emisor; this.clock = clock;
         this.altaOracle = altaOracle;
+        this.mapeo = mapeo;
     }
 
     public RegistroFactura emitir(String clave, SolicitudFactura solicitud) {
@@ -35,6 +37,13 @@ public final class EmitirFactura {
         FacturaStore.Reserva reserva = store.reservar(clave, solicitud);
         if (!reserva.nueva()) return consultar(reserva.id());
         Factura factura = regla.construir(reserva.id(), reserva.numero(), OffsetDateTime.now(clock), emisorFactura, solicitud);
+        if (solicitud.idEmpresa() != null) {
+            MapeoParametrosFeel.Codigos codigos = mapeo.consultar(solicitud.idEmpresa(),
+                    solicitud.cliente().tipoDocumento(), solicitud.metodoPago(),
+                    solicitud.codigoMoneda() == null ? 1 : solicitud.codigoMoneda());
+            factura = factura.conCodigosEmision(codigos.tipoDocumento(), codigos.metodoPago(),
+                    codigos.moneda(), codigos.codigoSistema());
+        }
         AltaFacturaWeb.Resultado alta = altaOracle.registrar(factura);
         RegistroFactura preparada = new RegistroFactura(factura, new ResultadoEmision(ResultadoEmision.Estado.PREPARADA,
                 proveedor.codigo(), proveedor.simulado(), null, "Preparada para envio", null, null, null, null, null));

@@ -5,8 +5,13 @@ import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import com.bga.facturacion_services.facturacion.application.MapeoParametrosFeel;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -20,6 +25,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest
 @AutoConfigureMockMvc
+@Import(FeelEmisionTest.MapeoDePrueba.class)
 class FeelEmisionTest {
     static final AtomicReference<String> ULTIMO = new AtomicReference<>();
     static final AtomicReference<String> RESPUESTA = new AtomicReference<>("""
@@ -90,7 +96,7 @@ class FeelEmisionTest {
 
     private String cuerpo(String cliente) {
         return """
-                {"nitEmisor":"1028279021","razonSocialEmisor":"COOPERATIVA EDUCACIONAL SANTA CRUZ S.R.L.",
+                {"idEmpresa":91,"nitEmisor":"1028279021","razonSocialEmisor":"COOPERATIVA EDUCACIONAL SANTA CRUZ S.R.L.",
                 "municipio":"Santa Cruz","direccion":"Calle 1","telefono":"70000000",
                 "codigoSucursal":0,"codigoPuntoVenta":0,"codigoTipoDocumentoIdentidad":1,
                 "numeroDocumento":"1234567","nombreRazonSocial":"%s","correoCliente":"a@b.com",
@@ -99,6 +105,17 @@ class FeelEmisionTest {
                 "descripcion":"Producto de demostracion","actividadEconomica":"620000","codigoProductoSin":99100,
                 "unidadMedida":58,"cantidad":2,"precioUnitario":50.00,"montoDescuento":5.00}]}
                 """.formatted(cliente);
+    }
+
+    @TestConfiguration
+    static class MapeoDePrueba {
+        @Bean
+        @Primary
+        MapeoParametrosFeel mapeoParametrosFeel() {
+            return (idEmpresa, tipoDocumento, metodoPago, moneda) -> new MapeoParametrosFeel.Codigos(
+                    tipoDocumento == 5 ? "NIT" : "CI", String.valueOf(metodoPago),
+                    moneda == 2 ? "2225" : "0", "SIST");
+        }
     }
 
     private static HttpServer servidor() {
